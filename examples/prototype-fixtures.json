@@ -1,0 +1,85 @@
+{
+  "fixtureOnly": true,
+  "notDatabaseSeed": true,
+  "countryCode": "GA",
+  "currency": "XAF",
+  "mission": {
+    "fixtureId": "mission-demo-01",
+    "companyFixtureId": "company-a",
+    "title": "Manœuvre de chantier",
+    "siteName": "Chantier Le Méridien",
+    "area": "Libreville",
+    "status": "OPEN",
+    "headcount": 10,
+    "termsRevision": 1,
+    "dayPayMinor": 10000,
+    "days": 3,
+    "startsAt": "2026-11-30T07:00:00Z",
+    "endsAt": "2026-12-02T16:00:00Z"
+  },
+  "companyA": {
+    "fixtureId": "company-a",
+    "name": "BTP Horizon",
+    "verificationStatus": "VERIFIED"
+  },
+  "companyB": {
+    "fixtureId": "company-b",
+    "name": "Entreprise Exemple",
+    "verificationStatus": "PENDING"
+  },
+  "snapshots": {
+    "applicationReceived": {
+      "applicationStatus": "SUBMITTED",
+      "proposal": null,
+      "assignment": null
+    },
+    "availabilityPending": {
+      "applicationStatus": "PROPOSED",
+      "proposal": {
+        "companyDecision": "ACCEPTED",
+        "workerDecision": "PENDING",
+        "status": "AWAITING_WORKER"
+      },
+      "assignment": null
+    },
+    "readyForStaff": {
+      "applicationStatus": "PROPOSED",
+      "proposal": {
+        "companyDecision": "ACCEPTED",
+        "workerDecision": "CONFIRMED",
+        "status": "READY_FOR_ASSIGNMENT"
+      },
+      "assignment": null
+    },
+    "assigned": {
+      "applicationStatus": "ASSIGNED",
+      "proposal": {
+        "companyDecision": "ACCEPTED",
+        "workerDecision": "CONFIRMED",
+        "status": "FINALIZED"
+      },
+      "assignment": {
+        "status": "CONFIRMED",
+        "termsRevision": 1
+      }
+    }
+  },
+  "expectedSecurityCases": [
+    {
+      "case": "company-b requests company-a proposals",
+      "expected": "404 no data"
+    },
+    {
+      "case": "worker attempts staff finalization",
+      "expected": "403"
+    },
+    {
+      "case": "theme changes on fixed snapshot",
+      "expected": "no domain data or permissions change"
+    },
+    {
+      "case": "two staff fill last slot concurrently",
+      "expected": "one assignment success; one capacity conflict"
+    }
+  ]
+}

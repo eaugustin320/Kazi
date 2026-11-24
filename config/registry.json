@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "1.0.0",
+  "defaultCountry": "GA",
+  "countryConfigs": {
+    "GA@1.0.0": "countries/GA-1.0.0.json"
+  },
+  "themes": {
+    "gabon-premium@1.0.0": "themes/gabon-premium-1.0.0.json",
+    "forest-premium@1.0.0": "themes/forest-premium-1.0.0.json"
+  },
+  "activeCountryConfig": {
+    "GA": "GA@1.0.0"
+  },
+  "productionLaunchAuthorized": false
+}

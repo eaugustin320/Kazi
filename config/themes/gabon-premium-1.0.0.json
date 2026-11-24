@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "themeId": "gabon-premium@1.0.0",
+  "themeVersion": "1.0.0",
+  "mode": "light",
+  "notes": "Proposed Gabon launch design; not official national flag specifications.",
+  "colors": {
+    "background": "#F7F7F2",
+    "surface": "#FFFFFF",
+    "text": "#17251D",
+    "textMuted": "#53645D",
+    "border": "#DCE4DE",
+    "controlBorder": "#6F7F75",
+    "primary": "#0B5D3B",
+    "onPrimary": "#FFFFFF",
+    "primaryHover": "#08482E",
+    "accent": "#F2C94C",
+    "onAccent": "#27351C",
+    "infoSurface": "#EAF2FF",
+    "infoText": "#174EA6",
+    "successSurface": "#E8F4EC",
+    "successText": "#155C34",
+    "warningSurface": "#FFF4D0",
+    "warningText": "#744300",
+    "dangerSurface": "#FDECEE",
+    "dangerText": "#9B1C1C",
+    "focusRing": "#174EA6",
+    "focusRingOnDark": "#FFD166",
+    "sidebar": "#123E32",
+    "onSidebar": "#FFFFFF"
+  }
+}

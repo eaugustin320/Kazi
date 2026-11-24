@@ -1,0 +1,652 @@
+// Kazi PostgreSQL Prisma Logical Schema
+// Strictly implements DATABASE.md, PRD.md, and WORKFLOWS.md
+// Country Launch: GA (Gabon) | Currency: XAF (exponent 0) | Timezone: Africa/Libreville
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// 1. Identity, Profiles & Permissions
+// ----------------------------------------------------
+
+model AuthUser {
+  id            String    @id
+  name          String?
+  email         String?   @unique
+  emailVerified Boolean   @default(false)
+  phoneNumber   String?   @unique
+  phoneVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  sessions      AuthSession[]
+  accounts      AuthAccount[]
+  workerProfile WorkerProfile?
+  preferences   UserPreference?
+  memberships   CompanyMembership[]
+  staffGrants   StaffGrant[]
+
+  @@map("auth_user")
+}
+
+model AuthSession {
+  id        String   @id
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_session")
+}
+
+model AuthAccount {
+  id           String    @id
+  userId       String    @map("user_id")
+  accountId    String    @map("account_id")
+  providerId   String    @map("provider_id")
+  accessToken  String?   @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  idToken      String?   @map("id_token")
+  expiresAt    DateTime? @map("expires_at")
+  password     String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@map("auth_account")
+}
+
+model AuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([identifier, value])
+  @@map("auth_verification")
+}
+
+model WorkerProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  countryCode      String   @default("GA") @map("country_code") @db.Char(2)
+  displayName      String   @map("display_name")
+  tradeCodes       String[] @map("trade_codes")
+  areaCode         String   @default("libreville") @map("area_code")
+  experienceText   String?  @map("experience_text")
+  availabilityCode String   @default("AVAILABLE") @map("availability_code")
+  profileStatus    String   @default("ACTIVE") @map("profile_status")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                  AuthUser               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications          Application[]
+  assignments           Assignment[]
+  assignmentDays        AssignmentDay[]
+  verificationDocuments VerificationDocument[]
+  supportCases          SupportCase[]
+
+  @@map("worker_profiles")
+}
+
+model UserPreference {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique @map("user_id")
+  notificationPreferences Json     @default("{}") @map("notification_preferences")
+  preferredLocale         String   @default("fr-GA") @map("preferred_locale")
+  version                 Int      @default(1)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Company {
+  id                    String   @id @default(uuid())
+  countryCode           String   @default("GA") @map("country_code") @db.Char(2)
+  legalName             String   @map("legal_name")
+  tradeSector           String?  @map("trade_sector")
+  registrationReference String?  @map("registration_reference") // RCCM
+  taxReference          String?  @map("tax_reference")          // NIF
+  areaCode              String   @default("libreville") @map("area_code")
+  address               String?
+  contactEmail          String   @map("contact_email")
+  contactPhone          String?  @map("contact_phone")
+  verificationStatus    String   @default("PENDING") @map("verification_status") // PENDING, VERIFIED, CHANGES_REQUESTED
+  version               Int      @default(1)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  memberships           CompanyMembership[]
+  recruitmentRequests   RecruitmentRequest[]
+  missions              Mission[]
+  verificationDocuments VerificationDocument[]
+  quotes                Quote[]
+  invoices              Invoice[]
+  supportCases          SupportCase[]
+
+  @@map("companies")
+}
+
+model CompanyMembership {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  userId    String   @map("user_id")
+  role      String   @default("OWNER") // OWNER
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@map("company_memberships")
+}
+
+model StaffGrant {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  countryCode String   @default("GA") @map("country_code") @db.Char(2)
+  capability  String   // RECRUITER, FINANCE, SUPER_ADMIN
+  status      String   @default("ACTIVE")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, countryCode, capability])
+  @@map("staff_grants")
+}
+
+model VerificationDocument {
+  id              String    @id @default(uuid())
+  companyId       String?   @map("company_id")
+  workerProfileId String?   @map("worker_profile_id")
+  objectKey       String    @unique @map("object_key")
+  fileName        String    @map("file_name")
+  mimeType        String    @map("mime_type")
+  sizeBytes       BigInt    @map("size_bytes")
+  scanStatus      String    @default("PENDING") @map("scan_status") // PENDING, CLEAN, REJECTED
+  reviewStatus    String    @default("PENDING") @map("review_status") // PENDING, APPROVED, REJECTED
+  reviewedBy      String?   @map("reviewed_by")
+  reviewReason    String?   @map("review_reason")
+  retentionUntil  DateTime? @map("retention_until") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workerProfile WorkerProfile? @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  @@map("verification_documents")
+}
+
+// ----------------------------------------------------
+// 2. Recruitment & Mission Delivery
+// ----------------------------------------------------
+
+model RecruitmentRequest {
+  id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
+  countryCode   String   @default("GA") @map("country_code") @db.Char(2)
+  tradeCode     String   @map("trade_code")
+  headcount     Int
+  proposedTerms Json     @map("proposed_terms")
+  status        String   @default("DRAFT") @map("status") // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, CANCELLED
+  submittedBy   String   @map("submitted_by")
+  reviewedBy    String?  @map("reviewed_by")
+  reviewReason  String?  @map("review_reason")
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mission Mission?
+
+  @@index([companyId, status, createdAt])
+  @@map("recruitment_requests")
+}
+
+model Mission {
+  id             String   @id @default(uuid())
+  requestId      String   @unique @map("request_id")
+  companyId      String   @map("company_id")
+  countryCode    String   @default("GA") @map("country_code") @db.Char(2)
+  currentTermsId String?  @map("current_terms_id")
+  status         String   @default("OPEN") @map("status") // OPEN, CLOSED_TO_APPLICATIONS, IN_PROGRESS, COMPLETED, CANCELLED
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  request      RecruitmentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  terms        MissionTerms[]
+  applications Application[]
+  assignments  Assignment[]
+  quotes       Quote[]
+  supportCases SupportCase[]
+
+  @@index([countryCode, status, createdAt])
+  @@map("missions")
+}
+
+model MissionTerms {
+  id               String   @id @default(uuid())
+  missionId        String   @map("mission_id")
+  revision         Int
+  tradeCode        String   @map("trade_code")
+  title            String
+  description      String
+  siteName         String   @map("site_name")
+  areaCode         String   @default("libreville") @map("area_code")
+  siteAddress      String   @map("site_address")
+  headcount        Int
+  payAmount        BigInt   @map("pay_amount") // In minor units (e.g. 10000 XAF)
+  payCurrency      String   @default("XAF") @map("pay_currency") @db.Char(3)
+  currencyExponent Int      @default(0) @map("currency_exponent") @db.SmallInt
+  payUnit          String   @default("DAY") @map("pay_unit")
+  paymentTiming    String   @default("UPON_COMPLETION") @map("payment_timing")
+  paymentMethod    String   @default("DIRECT_COMPANY_PAYMENT") @map("payment_method")
+  equipmentText    String   @map("equipment_text")
+  timezone         String   @default("Africa/Libreville")
+  startsAt         DateTime @map("starts_at") @db.Timestamptz
+  endsAt           DateTime @map("ends_at") @db.Timestamptz
+  scheduleSummary  String   @map("schedule_summary")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  mission      Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  days         MissionDay[]
+  applications Application[]
+  proposals    Proposal[]
+  assignments  Assignment[]
+
+  @@unique([missionId, revision])
+  @@map("mission_terms")
+}
+
+model MissionDay {
+  id           String   @id @default(uuid())
+  termsId      String   @map("terms_id")
+  localDate    DateTime @map("local_date") @db.Date
+  startsAt     DateTime @map("starts_at") @db.Timestamptz
+  endsAt       DateTime @map("ends_at") @db.Timestamptz
+  breakMinutes Int      @default(60) @map("break_minutes")
+
+  terms          MissionTerms    @relation(fields: [termsId], references: [id], onDelete: Cascade)
+  assignmentDays AssignmentDay[]
+
+  @@unique([termsId, localDate])
+  @@map("mission_days")
+}
+
+model Application {
+  id               String   @id @default(uuid())
+  missionId        String   @map("mission_id")
+  workerId         String   @map("worker_id")
+  termsId          String   @map("terms_id")
+  status           String   @default("SUBMITTED") // SUBMITTED, SHORTLISTED, PROPOSED, ASSIGNED, WITHDRAWN, NOT_SELECTED
+  submittedAt      DateTime @default(now()) @map("submitted_at") @db.Timestamptz
+  withdrawalReason String?  @map("withdrawal_reason")
+  version          Int      @default(1)
+
+  mission   Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  worker    WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  terms     MissionTerms  @relation(fields: [termsId], references: [id], onDelete: Cascade)
+  proposals Proposal[]
+
+  @@unique([missionId, workerId])
+  @@index([workerId, submittedAt])
+  @@map("applications")
+}
+
+model Proposal {
+  id               String    @id @default(uuid())
+  applicationId    String    @map("application_id")
+  termsId          String    @map("terms_id")
+  proposedBy       String    @map("proposed_by")
+  companyDecision  String    @default("PENDING") @map("company_decision") // PENDING, ACCEPTED, DECLINED
+  workerDecision   String    @default("PENDING") @map("worker_decision")  // PENDING, CONFIRMED, DECLINED
+  companyDecidedAt DateTime? @map("company_decided_at") @db.Timestamptz
+  workerDecidedAt  DateTime? @map("worker_decided_at") @db.Timestamptz
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz // 24h countdown
+  status           String    @default("PENDING_COMPANY") // PENDING_COMPANY, AWAITING_WORKER, READY_FOR_ASSIGNMENT, FINALIZED, EXPIRED, DECLINED
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  terms       MissionTerms @relation(fields: [termsId], references: [id], onDelete: Cascade)
+  assignment  Assignment?
+
+  @@map("proposals")
+}
+
+model Assignment {
+  id                     String    @id @default(uuid())
+  proposalId             String    @unique @map("proposal_id")
+  missionId              String    @map("mission_id")
+  workerId               String    @map("worker_id")
+  termsId                String    @map("terms_id")
+  status                 String    @default("CONFIRMED") // CONFIRMED, IN_PROGRESS, COMPLETED, WITHDRAWN_BY_WORKER, CANCELLED_BY_COMPANY
+  confirmedBy            String    @map("confirmed_by")
+  confirmedAt            DateTime  @default(now()) @map("confirmed_at") @db.Timestamptz
+  supersedesAssignmentId String?   @map("supersedes_assignment_id")
+  cancellationReason     String?   @map("cancellation_reason")
+  version                Int       @default(1)
+
+  proposal               Proposal             @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  mission                Mission              @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  worker                 WorkerProfile        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  terms                  MissionTerms         @relation(fields: [termsId], references: [id], onDelete: Cascade)
+  assignmentDays         AssignmentDay[]
+  replacementRequests    ReplacementRequest[]
+  supportCases           SupportCase[]
+
+  @@map("assignments")
+}
+
+model AssignmentDay {
+  id             String   @id @default(uuid())
+  assignmentId   String   @map("assignment_id")
+  missionDayId   String   @map("mission_day_id")
+  workerId       String   @map("worker_id")
+  startsAt       DateTime @map("starts_at") @db.Timestamptz
+  endsAt         DateTime @map("ends_at") @db.Timestamptz
+  coverageStatus String   @default("ACTIVE") @map("coverage_status")
+
+  assignment Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  missionDay MissionDay    @relation(fields: [missionDayId], references: [id], onDelete: Cascade)
+  worker     WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  attendance Attendance?
+
+  @@unique([assignmentId, missionDayId])
+  @@index([workerId, startsAt, endsAt])
+  @@map("assignment_days")
+}
+
+model Attendance {
+  id                       String    @id @default(uuid())
+  assignmentDayId          String    @unique @map("assignment_day_id")
+  declaredStatus           String    @default("NOT_RECORDED") @map("declared_status") // NOT_RECORDED, PRESENT, ABSENT, PARTIAL
+  workedMinutes            Int?      @map("worked_minutes")
+  declaredBy               String?   @map("declared_by")
+  declarationRevision      Int       @default(0) @map("declaration_revision")
+  workerDecision           String    @default("PENDING") @map("worker_decision") // PENDING, CONFIRMED, DISPUTED
+  workerConfirmedRevision  Int?      @map("worker_confirmed_revision")
+  resolutionStatus         String    @default("UNRESOLVED") @map("resolution_status") // UNRESOLVED, RESOLVED_BY_STAFF
+  resolvedBy               String?   @map("resolved_by")
+  reason                   String?
+  version                  Int       @default(1)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  assignmentDay AssignmentDay     @relation(fields: [assignmentDayId], references: [id], onDelete: Cascade)
+  events        AttendanceEvent[]
+
+  @@map("attendance")
+}
+
+model AttendanceEvent {
+  id            String   @id @default(uuid())
+  attendanceId  String   @map("attendance_id")
+  actorId       String   @map("actor_id")
+  eventCode     String   @map("event_code")
+  previousValue Json?    @map("previous_value")
+  newValue      Json     @map("new_value")
+  eventAt       DateTime @default(now()) @map("event_at") @db.Timestamptz
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@map("attendance_events")
+}
+
+model ReplacementRequest {
+  id                      String   @id @default(uuid())
+  originalAssignmentId    String   @map("original_assignment_id")
+  requestedBy             String   @map("requested_by")
+  reasonCode              String   @map("reason_code")
+  status                  String   @default("REQUESTED") // REQUESTED, UNDER_REVIEW, PROPOSING, CONFIRMED, CANCELLED
+  replacementAssignmentId String?  @map("replacement_assignment_id")
+  note                    String?
+  version                 Int      @default(1)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  originalAssignment Assignment @relation(fields: [originalAssignmentId], references: [id], onDelete: Cascade)
+
+  @@map("replacement_requests")
+}
+
+// ----------------------------------------------------
+// 3. Commercial, Invoicing & Support Records
+// ----------------------------------------------------
+
+model Quote {
+  id                 String    @id @default(uuid())
+  companyId          String    @map("company_id")
+  missionId          String?   @map("mission_id")
+  countryCode        String    @default("GA") @map("country_code") @db.Char(2)
+  revision           Int       @default(1)
+  status             String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, DECLINED, EXPIRED
+  currency           String    @default("XAF") @db.Char(3)
+  currencyExponent   Int       @default(0) @map("currency_exponent") @db.SmallInt
+  serviceAmount      BigInt    @map("service_amount")
+  taxAmount          BigInt    @map("tax_amount")
+  totalAmount        BigInt    @map("total_amount")
+  commercialSnapshot Json      @map("commercial_snapshot")
+  expiresAt          DateTime  @map("expires_at") @db.Timestamptz
+  acceptedBy         String?   @map("accepted_by")
+  acceptedAt         DateTime? @map("accepted_at") @db.Timestamptz
+  version            Int       @default(1)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mission  Mission?  @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  invoices Invoice[]
+
+  @@map("quotes")
+}
+
+model Invoice {
+  id               String    @id @default(uuid())
+  quoteId          String    @map("quote_id")
+  companyId        String    @map("company_id")
+  countryCode      String    @default("GA") @map("country_code") @db.Char(2)
+  invoiceNumber    String    @unique @map("invoice_number")
+  status           String    @default("SAMPLE") // SAMPLE, ISSUED, PARTIALLY_PAID, PAID, OVERDUE, VOID
+  currency         String    @default("XAF") @db.Char(3)
+  currencyExponent Int       @default(0) @map("currency_exponent") @db.SmallInt
+  subtotalAmount   BigInt    @map("subtotal_amount")
+  taxAmount        BigInt    @map("tax_amount")
+  totalAmount      BigInt    @map("total_amount")
+  partyTaxSnapshot Json      @map("party_tax_snapshot")
+  issuedAt         DateTime? @map("issued_at") @db.Timestamptz
+  dueAt            DateTime? @map("due_at") @db.Timestamptz
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  quote    Quote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines    InvoiceLine[]
+  receipts ServiceReceipt[]
+
+  @@index([companyId, status, dueAt])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String @id @default(uuid())
+  invoiceId   String @map("invoice_id")
+  description String
+  quantity    Int
+  unitAmount  BigInt @map("unit_amount")
+  taxAmount   BigInt @map("tax_amount")
+  lineTotal   BigInt @map("line_total")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_lines")
+}
+
+model ServiceReceipt {
+  id                 String   @id @default(uuid())
+  invoiceId          String   @map("invoice_id")
+  amount             BigInt
+  currency           String   @default("XAF") @db.Char(3)
+  currencyExponent   Int      @default(0) @map("currency_exponent") @db.SmallInt
+  externalReference  String   @map("external_reference")
+  receivedAt         DateTime @map("received_at") @db.Timestamptz
+  recordedBy         String   @map("recorded_by")
+  reversesReceiptId  String?  @unique @map("reverses_receipt_id")
+  note               String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, externalReference])
+  @@map("service_receipts")
+}
+
+model SupportCase {
+  id              String   @id @default(uuid())
+  countryCode     String   @default("GA") @map("country_code") @db.Char(2)
+  companyId       String?  @map("company_id")
+  workerId        String?  @map("worker_id")
+  missionId       String?  @map("mission_id")
+  assignmentId    String?  @map("assignment_id")
+  reporterUserId  String   @map("reporter_user_id")
+  category        String   // CHANTIER, PAIEMENT, POINTAGE, ACCES
+  status          String   @default("OPEN") // OPEN, IN_PROGRESS, WAITING_ON_PARTY, RESOLVED
+  assignedStaffId String?  @map("assigned_staff_id")
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  company    Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  worker     WorkerProfile? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  mission    Mission?       @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  assignment Assignment?    @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  messages   CaseMessage[]
+
+  @@index([countryCode, status, updatedAt])
+  @@map("support_cases")
+}
+
+model CaseMessage {
+  id         String   @id @default(uuid())
+  caseId     String   @map("case_id")
+  authorId   String   @map("author_id")
+  visibility String   @default("PUBLIC_TO_CASE") // PUBLIC_TO_CASE, STAFF_ONLY
+  body       String
+  eventAt    DateTime @default(now()) @map("event_at") @db.Timestamptz
+
+  supportCase SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_messages")
+}
+
+// ----------------------------------------------------
+// 4. System, Notifications, Outbox & Audit
+// ----------------------------------------------------
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  eventId     String    @map("event_id") @db.Uuid
+  templateKey String    @map("template_key")
+  payload     Json
+  readAt      DateTime? @map("read_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([userId, eventId, templateKey])
+  @@map("notifications")
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventKey      String    @map("event_key")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  payload       Json
+  status        String    @default("PENDING") // PENDING, DELIVERED, DEAD_LETTER
+  attemptCount  Int       @default(0) @map("attempt_count")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
+  leasedUntil   DateTime? @map("leased_until") @db.Timestamptz
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_events")
+}
+
+model ProviderEvent {
+  id              String    @id @default(uuid())
+  provider        String
+  providerEventId String    @map("provider_event_id")
+  verifiedAt      DateTime  @default(now()) @map("verified_at") @db.Timestamptz
+  processedAt     DateTime? @map("processed_at") @db.Timestamptz
+
+  @@unique([provider, providerEventId])
+  @@map("provider_events")
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  actorId        String?  @map("actor_id")
+  countryCode    String   @default("GA") @map("country_code") @db.Char(2)
+  companyId      String?  @map("company_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id")
+  redactedChange Json     @map("redacted_change")
+  requestId      String?  @map("request_id")
+  occurredAt     DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+
+  @@index([countryCode, occurredAt])
+  @@map("audit_events")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  actorScope     String   @map("actor_scope")
+  routeKey       String   @map("route_key")
+  idempotencyKey String   @map("idempotency_key")
+  requestHash    String   @map("request_hash")
+  responseCode   Int      @map("response_code")
+  responseBody   Json     @map("response_body")
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([actorScope, routeKey, idempotencyKey])
+  @@map("idempotency_records")
+}
+
+model ConfigurationActivation {
+  id                 String   @id @default(uuid())
+  countryCode        String   @map("country_code") @db.Char(2)
+  activationRevision BigInt   @map("activation_revision")
+  configVersion      String   @map("config_version")
+  themeId            String   @map("theme_id")
+  activatedBy        String   @map("activated_by")
+  reason             String
+  activatedAt        DateTime @default(now()) @map("activated_at") @db.Timestamptz
+
+  @@unique([countryCode, activationRevision])
+  @@map("configuration_activations")
+}

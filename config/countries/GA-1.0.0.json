@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "countryCode": "GA",
+  "configVersion": "1.0.0",
+  "launchStatus": "DESIGN_BASELINE",
+  "productionEnabled": false,
+  "defaultLocale": "fr-GA",
+  "supportedLocales": [
+    "fr-GA"
+  ],
+  "currency": {
+    "code": "XAF",
+    "displayLabel": "FCFA",
+    "minorUnitExponent": 0
+  },
+  "timezone": "Africa/Libreville",
+  "phone": {
+    "region": "GA",
+    "callingPrefix": "+241"
+  },
+  "serviceAreas": [
+    {
+      "code": "libreville",
+      "label": "Libreville",
+      "enabledForDesign": true,
+      "enabledForProduction": false
+    }
+  ],
+  "defaultThemeId": "gabon-premium@1.0.0",
+  "fallbackThemeId": "gabon-premium@1.0.0",
+  "configActivationRequires": "ADMIN_CAPABILITY_AND_AUDIT",
+  "legalPolicyRevision": null,
+  "invoicePolicyRevision": null
+}

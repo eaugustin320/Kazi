@@ -1,0 +1,148 @@
+{
+  "specificationEdition": "2.0.0",
+  "targetProductVersion": "1.0.0",
+  "country": "GA",
+  "createdOn": "2026-11-23",
+  "contents": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 4085,
+      "sha256": "687de9e062dc30ef06b6744553aeebe1ec5fe14bed3a64c75732f3493900f796"
+    },
+    {
+      "path": "AGENT_START.txt",
+      "bytes": 605,
+      "sha256": "2025e18b89e69311604d8e0a9e86e14a62cfb0067151007554e8a15aab19ab11"
+    },
+    {
+      "path": "AGENT_WORKFLOWS.md",
+      "bytes": 3982,
+      "sha256": "0f376b5a2816132bea135850617b47963b007164d897bc6fde05435c5d57a621"
+    },
+    {
+      "path": "API.md",
+      "bytes": 11428,
+      "sha256": "49c0a04c9f2e084f86afe5829b5d0d26675c3bfdcff1ea7f9cf42706cb50e5a7"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "bytes": 5803,
+      "sha256": "d5cb8a1f64b4f04ca5830ba7c539341cb89f67dcab7e78686a2a8c4d134a3570"
+    },
+    {
+      "path": "DATABASE.md",
+      "bytes": 11425,
+      "sha256": "4ed7243613ac745b11a2feef8f39b3153100e7fc5fb91c6baa945cee640707b5"
+    },
+    {
+      "path": "DECISIONS.md",
+      "bytes": 2582,
+      "sha256": "525c7c6433f970a04697a462bc8b347690dad47c9e976a5d953243df5e9e27d5"
+    },
+    {
+      "path": "DESIGN.md",
+      "bytes": 6649,
+      "sha256": "673e60340268c68614996823ed4a488ead74db5ab7d806d9ba1cc77e1074ba21"
+    },
+    {
+      "path": "IMPLEMENTATION_PLAN.md",
+      "bytes": 4305,
+      "sha256": "d21d5c16610e5f867ef5e7171d9bbe13adac28681ea2430b20af6f6eee6b3c8a"
+    },
+    {
+      "path": "MASTER_PLAYBOOK.md",
+      "bytes": 96897,
+      "sha256": "f307377777190147869d39d228a2ea6086bfc29eda7410d2e02485c6cce24e10"
+    },
+    {
+      "path": "OPERATIONS_AND_SECURITY.md",
+      "bytes": 3570,
+      "sha256": "e6fb1930f0eb578d62084f6f675bcea6b01e691c17964b795f38acbeba05cd26"
+    },
+    {
+      "path": "PRD.md",
+      "bytes": 8007,
+      "sha256": "3d8fac501cef17ac34603216cfed9e81a4829a17535427aca8be2274a71e2acf"
+    },
+    {
+      "path": "QA_AND_RELEASE.md",
+      "bytes": 3767,
+      "sha256": "26c7f9feca4ba26e69f4a84fae2aac51f0b8c1933fad14d6e3421105da411ce2"
+    },
+    {
+      "path": "README.md",
+      "bytes": 413,
+      "sha256": "bebc075903c14037128b452dd04436341eb76eacb42e3a3bdc43403c3e6abc92"
+    },
+    {
+      "path": "SOURCES.md",
+      "bytes": 1429,
+      "sha256": "a489ee68a1c3744cd92dda3c286d3c2a64726fbe19f7884f8481f176c61a0417"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 3925,
+      "sha256": "5c5cb73be09beb3f95a14b7bda112a9b8fde0a6478b77c47a8da07aaf0205b39"
+    },
+    {
+      "path": "THEMING_AND_COUNTRIES.md",
+      "bytes": 6237,
+      "sha256": "0d4efd9bcdee8d2446c7646059b3325fe91112111c3e1ff869a60912a8586ee7"
+    },
+    {
+      "path": "VALIDATION.md",
+      "bytes": 1442,
+      "sha256": "e468eace2af8dc5a60e9ad1b4d3108b2a02bf3716bc3b47f3d00d22475214498"
+    },
+    {
+      "path": "VERSIONING.md",
+      "bytes": 3086,
+      "sha256": "f912b82f4a29cb3ffbd51de64d8082438119cb5ce6ee26560ed2d7178b861871"
+    },
+    {
+      "path": "WORKFLOWS.md",
+      "bytes": 6565,
+      "sha256": "b62460453d2220938d7cf06ffa03580d45d388b5d79d5ce357da722a6f5cc047"
+    },
+    {
+      "path": "config/countries/GA-1.0.0.json",
+      "bytes": 781,
+      "sha256": "5731235fb2b804b89b341fb4af9d099915da532a84edeb6e66da4bc61ff2359a"
+    },
+    {
+      "path": "config/design-system.json",
+      "bytes": 623,
+      "sha256": "1bb8aa3312b277bd7f7046f80dc610fe7d089fd689fd2b640e585387cd26d460"
+    },
+    {
+      "path": "config/registry.json",
+      "bytes": 386,
+      "sha256": "55d1fd2d27dbc944e0414a67dbcaacf2829b44f5fac8dae34be78d9f3a5f6a69"
+    },
+    {
+      "path": "config/theme.schema.json",
+      "bytes": 3667,
+      "sha256": "ed6d630eb1fce26ae5de3407509e089edaf5108a400cb16abff08d033019bb4c"
+    },
+    {
+      "path": "config/themes/forest-premium-1.0.0.json",
+      "bytes": 875,
+      "sha256": "0b24aa9429d7cfcbc3239ecceaf29944fbc6627ccd9843a0a333816d71b1b0cf"
+    },
+    {
+      "path": "config/themes/gabon-premium-1.0.0.json",
+      "bytes": 872,
+      "sha256": "1072a9c41dea2b4b05a85c0f33ffe0248fc00567fd3ecd3f8903ac8e6498962a"
+    },
+    {
+      "path": "examples/prototype-fixtures.json",
+      "bytes": 2110,
+      "sha256": "8cd9645c37824f27b0449c87d560246662c2b20340488c22336d87a6c7c4bee8"
+    },
+    {
+      "path": "scripts/validate_pack.py",
+      "bytes": 4400,
+      "sha256": "7f0893ee47edbd29ac8d1d830930c6ea69bf4e01165bece8454c954739b91849"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "themeId": "forest-premium@1.0.0",
+  "themeVersion": "1.0.0",
+  "mode": "light",
+  "notes": "Previous forest and orange design direction retained as comparison preset.",
+  "colors": {
+    "background": "#F7F7F2",
+    "surface": "#FFFFFF",
+    "text": "#17251D",
+    "textMuted": "#53645D",
+    "border": "#DCE4DE",
+    "controlBorder": "#6F7F75",
+    "primary": "#F27B43",
+    "onPrimary": "#17251D",
+    "primaryHover": "#E96B33",
+    "accent": "#123E32",
+    "onAccent": "#FFFFFF",
+    "infoSurface": "#EAF2FF",
+    "infoText": "#174EA6",
+    "successSurface": "#E8F4EC",
+    "successText": "#155C34",
+    "warningSurface": "#FFF4D0",
+    "warningText": "#744300",
+    "dangerSurface": "#FDECEE",
+    "dangerText": "#9B1C1C",
+    "focusRing": "#174EA6",
+    "focusRingOnDark": "#FFD166",
+    "sidebar": "#123E32",
+    "onSidebar": "#FFFFFF"
+  }
+}
