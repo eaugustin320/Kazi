@@ -221,15 +221,42 @@ export function resetRecruitmentState(): void {
 export function seedWorker(worker: WorkerRecord): void {
   workersStore.set(worker.id, worker);
   const nowIso = new Date().toISOString();
+  let effectiveUserId = worker.userId;
 
   try {
-    execute(
-      `INSERT INTO auth_users (id, name, phone_number, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone_number = excluded.phone_number;`,
-      [worker.userId, worker.fullName, worker.phone, nowIso, nowIso]
+    const existingByPhone = get<{ id: string }>(
+      'SELECT id FROM auth_users WHERE phone_number = ? LIMIT 1;',
+      [worker.phone]
     );
+    if (existingByPhone && existingByPhone.id !== worker.userId) {
+      effectiveUserId = existingByPhone.id;
+    } else {
+      execute(
+        `INSERT INTO auth_users (id, name, phone_number, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone_number = excluded.phone_number;`,
+        [worker.userId, worker.fullName, worker.phone, nowIso, nowIso]
+      );
+    }
+  } catch {}
 
+  try {
+    const existingProfileByUser = get<{ id: string }>(
+      'SELECT id FROM worker_profiles WHERE user_id = ? LIMIT 1;',
+      [effectiveUserId]
+    );
+    if (existingProfileByUser && existingProfileByUser.id !== worker.id) {
+      // Ensure a separate auth_user exists for worker.userId if effectiveUserId already owns another profile
+      try {
+        execute(
+          `INSERT INTO auth_users (id, name, created_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO NOTHING;`,
+          [worker.userId, worker.fullName, nowIso, nowIso]
+        );
+        effectiveUserId = worker.userId;
+      } catch {}
+    }
     execute(
       `INSERT INTO worker_profiles (id, user_id, display_name, trade_codes, area_code, experience_text, profile_status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
@@ -240,7 +267,7 @@ export function seedWorker(worker: WorkerRecord): void {
          experience_text = excluded.experience_text;`,
       [
         worker.id,
-        worker.userId,
+        effectiveUserId,
         worker.fullName,
         JSON.stringify(worker.tradeCodes),
         worker.areaCode || 'libreville',

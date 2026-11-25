@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getDatabaseConnection, initDatabase } from './db/database';
 import { createOTPChallenge } from './auth/otp';
+import { isDevOrTestEnvironment } from './config/env';
 
 // Route Handlers
 import * as WorkerSendOtp from '../app/api/auth/worker/send-otp/route';
@@ -77,6 +78,8 @@ import * as StaffGrantUpdate from '../app/api/v1/staff/grants/[id]/route';
 
 import * as AttendanceRoute from '../app/api/v1/attendance/route';
 import * as ReplacementsRoute from '../app/api/v1/replacements/route';
+import * as StaffReplacementConfirm from '../app/api/v1/staff/replacements/[id]/confirm/route';
+import * as MeProfile from '../app/api/v1/me/profile/route';
 import * as MeNotifications from '../app/api/v1/me/notifications/route';
 import * as MeNotificationRead from '../app/api/v1/me/notifications/[id]/read/route';
 import * as DocumentsUploadIntents from '../app/api/v1/documents/upload-intents/route';
@@ -147,10 +150,10 @@ register('GET', '/api/health', async () => {
   }
 });
 
-// Development-only OTP helper (I2)
+// Development-only OTP helper (I2) — fail-closed outside explicit development/test mode
 register('POST', '/api/auth/dev-otp', async (req) => {
-  if (process.env.NODE_ENV === 'production') {
-    return new Response(JSON.stringify({ error: 'Not available in production' }), { status: 404 });
+  if (!isDevOrTestEnvironment()) {
+    return new Response(JSON.stringify({ error: 'Not available outside development/test' }), { status: 404 });
   }
   try {
     const body = await req.json();
@@ -217,9 +220,13 @@ register('GET', '/api/v1/attendance', AttendanceRoute.GET);
 register('PUT', '/api/v1/assignment-days/:id/attendance', AssignmentDaysAttendance.PUT);
 register('POST', '/api/v1/attendance/:id/worker-decision', AttendanceWorkerDecision.POST);
 register('POST', '/api/v1/staff/attendance/:id/resolve', StaffAttendanceResolve.POST);
+register('GET', '/api/v1/replacements', ReplacementsRoute.GET);
 register('POST', '/api/v1/replacements', ReplacementsRoute.POST);
+register('POST', '/api/v1/staff/replacements/:id/confirm', StaffReplacementConfirm.POST);
 
-// Notifications & Documents
+// Notifications, Profile & Documents
+register('GET', '/api/v1/me/profile', MeProfile.GET);
+register('PATCH', '/api/v1/me/profile', MeProfile.PATCH);
 register('GET', '/api/v1/me/notifications', MeNotifications.GET);
 register('POST', '/api/v1/me/notifications/:id/read', MeNotificationRead.POST);
 register('POST', '/api/v1/documents/upload-intents', DocumentsUploadIntents.POST);

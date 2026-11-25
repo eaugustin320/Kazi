@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSession } from '@/server/auth/session';
 import { verifyMfaChallenge } from '@/server/auth/mfa';
+import { isSecureCookieEnvironment } from '@/server/config/env';
+import { query } from '@/server/db/database';
 
 const StaffMfaVerifySchema = z.object({
   mfaTicket: z.string().min(5),
@@ -36,11 +38,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const capabilities = email.includes('admin')
-      ? ['RECRUITER', 'FINANCE', 'SUPER_ADMIN']
-      : email.includes('finance')
-      ? ['FINANCE']
-      : ['RECRUITER'];
+    // Look up active database grants first; fall back to role-based defaults if not yet seeded
+    let capabilities: string[] = [];
+    try {
+      const dbGrants = query<{ capability: string }>(
+        `SELECT sg.capability
+         FROM staff_grants sg
+         JOIN auth_users u ON sg.user_id = u.id
+         WHERE LOWER(u.email) = ? AND sg.status = 'ACTIVE';`,
+        [email.toLowerCase()]
+      );
+      if (dbGrants && dbGrants.length > 0) {
+        capabilities = dbGrants.map((g) => g.capability);
+      }
+    } catch {}
+
+    if (capabilities.length === 0) {
+      capabilities = email.includes('admin')
+        ? ['RECRUITER', 'FINANCE', 'SUPER_ADMIN']
+        : email.includes('finance')
+        ? ['FINANCE']
+        : ['RECRUITER'];
+    }
 
     const session = createSession({
       userId: `usr_staff_${email.split('@')[0]}`,
@@ -66,7 +85,7 @@ export async function POST(request: Request) {
 
     response.cookies.set('kazi_session', session.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookieEnvironment(),
       sameSite: 'lax',
       path: '/',
       maxAge: 24 * 3600, // 24h max for staff sessions

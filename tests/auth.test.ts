@@ -369,8 +369,10 @@ describe('Phase D2: Authentication, Security & Tenant Isolation', () => {
 
     it('Production security enforcement: strictly rejects fixed MFA code 123456 and enforces dynamic challenge in production', async () => {
       const prevEnv = process.env.NODE_ENV;
+      const prevVitest = process.env.VITEST;
       try {
         process.env.NODE_ENV = 'production';
+        delete process.env.VITEST;
 
         // 1. Staff login with invalid credentials rejected in production
         const badLoginReq = new Request('http://localhost:3000/api/auth/staff/login', {
@@ -395,8 +397,48 @@ describe('Phase D2: Authentication, Security & Tenant Isolation', () => {
         expect(mfaRes.status).toBe(401);
         const mfaErr = await mfaRes.json();
         expect(mfaErr.error.code).toBe('INVALID_MFA_CODE');
+
+        // 3. Real RFC 6238 TOTP code succeeds in production for a seeded staff user
+        const { hashPassword: hp } = await import('../src/server/auth/passwords');
+        const { execute: dbExec } = await import('../src/server/db/database');
+        const { getOrProvisionStaffTotpSecret } = await import('../src/server/auth/mfa');
+        const { generateTotpCode } = await import('../src/server/auth/totp');
+        const nowIso = new Date().toISOString();
+        dbExec(
+          `INSERT INTO auth_users (id, name, email, password_hash, created_at, updated_at)
+           VALUES ('usr_staff_prod_admin', 'Admin Prod', 'admin@kazi.ga', ?, ?, ?)
+           ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash;`,
+          [hp('ProdStaffPass2026!'), nowIso, nowIso]
+        );
+
+        const prodLoginReq = new Request('http://localhost:3000/api/auth/staff/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'admin@kazi.ga', password: 'ProdStaffPass2026!' }),
+        });
+        const prodLoginRes = await staffLoginHandler(prodLoginReq);
+        expect(prodLoginRes.status).toBe(200);
+        const prodLoginBody = await prodLoginRes.json();
+        // Ensure debugMfaCode is never leaked in production
+        expect(prodLoginBody.data.debugMfaCode).toBeUndefined();
+
+        const totpSecret = getOrProvisionStaffTotpSecret('admin@kazi.ga');
+        const liveTotpCode = generateTotpCode(totpSecret);
+
+        const prodMfaReq = new Request('http://localhost:3000/api/auth/staff/mfa-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'admin@kazi.ga',
+            mfaTicket: prodLoginBody.data.mfaTicket,
+            code: liveTotpCode,
+          }),
+        });
+        const prodMfaRes = await staffMfaHandler(prodMfaReq);
+        expect(prodMfaRes.status).toBe(200);
       } finally {
         process.env.NODE_ENV = prevEnv;
+        if (prevVitest !== undefined) process.env.VITEST = prevVitest;
       }
     });
   });

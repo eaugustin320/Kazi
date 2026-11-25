@@ -29,4 +29,7 @@ export default defineConfig({
       },
     },
   },
-});
+  test: {
+    include: ['tests/**/*.test.ts'],
+  },
+} as any);

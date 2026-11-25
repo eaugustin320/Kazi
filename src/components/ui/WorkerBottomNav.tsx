@@ -2,7 +2,7 @@
 // Fixed to bottom of mobile view: Missions, Candidatures, Messages, Profil
 
 import React from 'react';
-import { Search, Briefcase, MessageSquare, User } from 'lucide-react';
+import { Search, Briefcase, CalendarCheck, MessageSquare, User } from 'lucide-react';
 
 export interface WorkerBottomNavProps {
   activeTab: string;
@@ -18,6 +18,7 @@ export const WorkerBottomNav: React.FC<WorkerBottomNavProps> = ({
   const tabs = [
     { id: 'discovery', label: 'Missions', icon: <Search size={20} /> },
     { id: 'applications', label: 'Candidatures', icon: <Briefcase size={20} /> },
+    { id: 'assignment', label: 'Pointage', icon: <CalendarCheck size={20} /> },
     { id: 'support', label: 'Messages', icon: <MessageSquare size={20} />, count: unreadCount },
     { id: 'profile', label: 'Profil', icon: <User size={20} /> },
   ];

@@ -189,7 +189,7 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
   // 2. Attendance Disputes & Staff Arbitration
   // -------------------------------------------------------------------------
   it('Disputes & Resolution: Worker contests pointage and Staff arbitrates resolution', async () => {
-    // Worker disputes
+    // Worker disputes (requires declarationRevision and decision: DISPUTE)
     const disputeRes = await fetch(`${BASE_URL}/api/v1/attendance/${attendanceId}/worker-decision`, {
       method: 'POST',
       headers: {
@@ -197,9 +197,9 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
         Authorization: `Bearer ${workerToken}`,
       },
       body: JSON.stringify({
-        decision: 'DISPUTED',
-        reason: 'J’ai travaillé jusqu’à 17h au lieu de 16h avec le chef d’équipe.',
-        expectedVersion: 1,
+        decision: 'DISPUTE',
+        declarationRevision: 1,
+        disputeReason: 'J’ai travaillé jusqu’à 17h au lieu de 16h avec le chef d’équipe.',
       }),
     });
 
@@ -207,7 +207,7 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
     const disputeData = await disputeRes.json();
     expect(disputeData.data.workerDecision).toBe('DISPUTED');
 
-    // Staff resolves dispute
+    // Staff resolves dispute (requires resolution, reason, expectedVersion)
     const resolveRes = await fetch(`${BASE_URL}/api/v1/staff/attendance/${attendanceId}/resolve`, {
       method: 'POST',
       headers: {
@@ -215,8 +215,8 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
         Authorization: `Bearer ${staffToken}`,
       },
       body: JSON.stringify({
-        decision: 'CONFIRMED_PRESENT',
-        resolutionNotes: 'Arbitrage Kazi : Pointage confirmé après vérification du cahier de chantier.',
+        resolution: 'PRESENT',
+        reason: 'Arbitrage Kazi : Pointage confirmé après vérification du cahier de chantier.',
         expectedVersion: 3,
       }),
     });
@@ -227,9 +227,27 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
   });
 
   // -------------------------------------------------------------------------
-  // 3. Replacements Workflow (KZ11)
+  // 3. Replacements Workflow & Ownership Authorization (KZ11)
   // -------------------------------------------------------------------------
-  it('Replacements: Records replacement request without fabricating assignments', async () => {
+  it('Replacements: Rejects worker callers (403), records company replacement request without fabricating assignments, and confirms via staff', async () => {
+    // Worker attempting to create replacement request must be rejected with 403
+    const workerForbiddenRes = await fetch(`${BASE_URL}/api/v1/replacements`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${workerToken}`,
+      },
+      body: JSON.stringify({
+        assignmentId,
+        missionId,
+        workerId: workerProfileId,
+        affectedDayIds: [assignmentDayId],
+        reasonCode: 'WORKER_ABSENT',
+      }),
+    });
+    expect(workerForbiddenRes.status).toBe(403);
+
+    // Company owning the mission creates replacement request
     const repRes = await fetch(`${BASE_URL}/api/v1/replacements`, {
       method: 'POST',
       headers: {
@@ -249,7 +267,24 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
     expect(repRes.status).toBe(200);
     const repData = await repRes.json();
     expect(repData.data.status).toBe('REQUESTED');
+    expect(repData.data.companyId).toBe(companyId);
     expect(repData.data.replacementAssignmentId).toBeUndefined(); // KZ11: No fabricated assignment
+
+    // Staff recruiter confirms replacement assignment
+    const confirmRes = await fetch(`${BASE_URL}/api/v1/staff/replacements/${repData.data.id}/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${staffToken}`,
+      },
+      body: JSON.stringify({
+        replacementAssignmentId: 'asgn_replacement_v1',
+        expectedVersion: 1,
+      }),
+    });
+    expect(confirmRes.status).toBe(200);
+    const confirmData = await confirmRes.json();
+    expect(confirmData.data.status).toBe('CONFIRMED');
   });
 
   // -------------------------------------------------------------------------
@@ -283,8 +318,8 @@ describe('v1 Features: Attendance, Disputes, Replacements, Support, Notification
         Authorization: `Bearer ${staffToken}`,
       },
       body: JSON.stringify({
-        bodyText: '[NOTE INTERNE STAFF] Contacter le responsable sécurité de BTP Horizon.',
-        isInternalNote: true,
+        body: '[NOTE INTERNE STAFF] Contacter le responsable sécurité de BTP Horizon.',
+        visibility: 'STAFF_ONLY',
       }),
     });
     expect([200, 201]).toContain(noteRes.status);

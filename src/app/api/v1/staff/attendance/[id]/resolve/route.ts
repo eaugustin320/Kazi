@@ -1,5 +1,6 @@
 // Staff Attendance Dispute Resolution Handler (POST /api/v1/staff/attendance/[id]/resolve)
 // Recruiter arbitrates disputed daily attendance (API.md line 57 KZ10)
+// Strictly requires expectedVersion for optimistic concurrency control.
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -7,12 +8,10 @@ import { authenticateRequest, requireStaffCapability } from '@/server/auth/rbac'
 import { staffResolveAttendance } from '@/modules/attendance/service';
 
 const ResolveSchema = z.object({
-  resolution: z.enum(['PRESENT', 'ABSENT', 'PARTIAL']).optional(),
-  decision: z.enum(['PRESENT', 'ABSENT', 'PARTIAL', 'CONFIRMED_PRESENT', 'CONFIRMED_ABSENT', 'SPLIT_HOURS']).optional(),
-  reason: z.string().optional(),
-  resolutionNotes: z.string().optional(),
+  resolution: z.enum(['PRESENT', 'ABSENT', 'PARTIAL']),
+  reason: z.string().min(5, 'Une justification détaillée est requise'),
   workedMinutes: z.number().int().min(1).optional(),
-  expectedVersion: z.number().int().optional().default(1),
+  expectedVersion: z.number().int().min(1),
 });
 
 export async function POST(
@@ -40,28 +39,22 @@ export async function POST(
       );
     }
 
-    const rawDecision = parsed.data.decision || parsed.data.resolution || 'PRESENT';
-    const normResolution = (rawDecision === 'CONFIRMED_PRESENT' || rawDecision === 'PRESENT')
-      ? 'PRESENT'
-      : (rawDecision === 'CONFIRMED_ABSENT' || rawDecision === 'ABSENT')
-      ? 'ABSENT'
-      : 'PARTIAL';
-    const normReason = parsed.data.resolutionNotes || parsed.data.reason || 'Décision d’arbitrage par le staff Kazi';
-    const normVersion = parsed.data.expectedVersion || 1;
-
     const result = staffResolveAttendance(
       session!.user.userId,
       attendanceId,
-      normResolution,
-      normReason,
+      parsed.data.resolution,
+      parsed.data.reason,
       parsed.data.workedMinutes,
-      normVersion
+      parsed.data.expectedVersion
     );
 
     if (!result.success) {
       const status =
-        result.errorCode === 'ATTENDANCE_NOT_FOUND' ? 404 :
-        result.errorCode === 'VERSION_CONFLICT' ? 409 : 400;
+        result.errorCode === 'ATTENDANCE_NOT_FOUND'
+          ? 404
+          : result.errorCode === 'VERSION_CONFLICT'
+          ? 409
+          : 400;
 
       return NextResponse.json(
         { error: { code: result.errorCode, message: result.errorMessage } },
@@ -73,12 +66,12 @@ export async function POST(
       data: result.attendance,
       meta: {
         requestId: `req_${Date.now()}`,
-        message: 'Litige de présence arbitré et clôturé par le recruteur staff (KZ10).',
+        message: 'Litige de pointage résolu par le recruteur Kazi.',
       },
     });
   } catch {
     return NextResponse.json(
-      { error: { code: 'SERVER_ERROR', message: 'Erreur lors de l’arbitrage du pointage.' } },
+      { error: { code: 'SERVER_ERROR', message: 'Erreur lors de la résolution du litige.' } },
       { status: 500 }
     );
   }

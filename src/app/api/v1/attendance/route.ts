@@ -9,6 +9,7 @@ import {
   listAttendanceByCompany,
   AttendanceRecord as ServiceAttendanceRecord,
 } from '@/modules/attendance/service';
+import { get } from '@/server/db/database';
 
 export async function GET(request: Request) {
   try {
@@ -30,7 +31,6 @@ export async function GET(request: Request) {
       records = listAttendanceByWorker(workerId);
     }
 
-    // Map ServiceAttendanceRecord to UI AttendanceRecord format
     const mapped = records.map((r) => {
       let reviewState = 'NOT_RECORDED';
       if (r.resolutionStatus === 'RESOLVED_BY_STAFF') {
@@ -43,20 +43,43 @@ export async function GET(request: Request) {
         reviewState = 'SUBMITTED_BY_COMPANY';
       }
 
+      // Resolve actual worker display name from DB if not cached on record
+      let workerName = r.workerName;
+      if (!workerName && r.workerId) {
+        try {
+          const wp = get<{ display_name: string }>(
+            'SELECT display_name FROM worker_profiles WHERE id = ? LIMIT 1;',
+            [r.workerId]
+          );
+          workerName = wp?.display_name;
+        } catch {}
+      }
+
       return {
         id: r.id,
-        missionId: r.missionId || 'mission-demo-01',
-        assignmentId: r.assignmentId || 'assign-01',
-        workerId: r.workerId || 'worker-01',
-        workerName: 'Paul Mba',
-        date: r.localDate || '2026-11-23',
+        assignmentDayId: r.assignmentDayId,
+        missionId: r.missionId,
+        missionTitle: r.missionTitle,
+        companyId: r.companyId,
+        assignmentId: r.assignmentId,
+        workerId: r.workerId,
+        workerName: workerName || r.workerId,
+        date: r.localDate,
         companyStatus: (r.declaredStatus === 'NOT_RECORDED' ? 'PRESENT' : r.declaredStatus) as any,
-        hoursWorked: r.workedMinutes ? Math.round((r.workedMinutes / 60) * 10) / 10 : 8,
+        declaredStatus: r.declaredStatus,
+        hoursWorked: r.workedMinutes != null ? Math.round((r.workedMinutes / 60) * 10) / 10 : 8,
         companyNote: r.reason || '',
-        workerAgreed: r.workerDecision === 'CONFIRMED' ? true : r.workerDecision === 'DISPUTED' ? false : null,
+        workerAgreed:
+          r.workerDecision === 'CONFIRMED'
+            ? true
+            : r.workerDecision === 'DISPUTED'
+            ? false
+            : null,
         workerDisputeNote: r.workerDecision === 'DISPUTED' ? r.reason : undefined,
         reviewState: reviewState as any,
         staffResolutionNote: r.resolutionStatus === 'RESOLVED_BY_STAFF' ? r.reason : undefined,
+        declarationRevision: r.declarationRevision,
+        version: r.version,
       };
     });
 

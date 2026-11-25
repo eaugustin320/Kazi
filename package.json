@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "server": "tsx src/server/server.ts",
+    "server": "tsx src/server/server.ts --dev",
     "seed": "tsx src/server/db/seed.ts",
     "start": "tsx src/server/server.ts",
     "test": "vitest run",
@@ -16,8 +16,10 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.6.0",
     "@prisma/client": "6.4.1",
+    "better-auth": "1.7.28",
     "lucide-react": "^1.16.0",
     "next": "16.4.6",
+    "pg": "8.23.1",
     "prisma": "6.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -25,7 +27,9 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "^26.6.6",
+    "@types/pg": "8.23.1",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",

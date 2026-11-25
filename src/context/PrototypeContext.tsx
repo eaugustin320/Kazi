@@ -17,6 +17,9 @@ import {
   KaziInvoice,
   AuditEvent,
   AttendanceStatus,
+  NotificationItem,
+  ReplacementItem,
+  ServiceQuote,
 } from '../types/domain';
 import {
   ThemeDefinition,
@@ -94,6 +97,9 @@ interface PrototypeContextType {
   attendance: AttendanceRecord[];
   supportTickets: SupportTicket[];
   invoices: KaziInvoice[];
+  quotes: ServiceQuote[];
+  replacements: ReplacementItem[];
+  notifications: NotificationItem[];
   auditLogs: AuditEvent[];
 
   // Toast System
@@ -111,10 +117,24 @@ interface PrototypeContextType {
   adminModerateRequest: (requestId: string, action: 'APPROVE' | 'REQUEST_CHANGES', reason?: string) => Promise<void>;
   adminProposeCandidates: (missionId: string, applicationIds: string[]) => Promise<{ success: boolean; error?: string }>;
   companyDeclareAttendance: (recordId: string, status: AttendanceStatus, hours: number, note: string) => Promise<void>;
+  workerConfirmAttendance: (recordId: string) => Promise<void>;
   workerDisputeAttendance: (recordId: string, disputeNote: string) => Promise<void>;
   adminResolveDispute: (recordId: string, resolvedStatus: AttendanceStatus, note: string) => Promise<void>;
-  adminRequestReplacement: (assignmentId: string, absentWorkerId: string, dates: string[], reason: string) => void;
+  adminRequestReplacement: (assignmentId: string, absentWorkerId: string, dates: string[], reason?: string) => Promise<void>;
+  adminConfirmReplacement: (requestId: string, replacementAssignmentId: string, expectedVersion: number) => Promise<void>;
+  createSupportTicket: (
+    category: 'CHANTIER' | 'PAIEMENT' | 'POINTAGE' | 'ACCES',
+    subject: string,
+    initialMessage: string,
+    missionId?: string
+  ) => Promise<void>;
   sendSupportMessage: (ticketId: string, content: string, isInternal?: boolean) => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  staffCreateAndSendQuote: (companyId: string, missionId: string, description: string, unitAmount: number) => Promise<void>;
+  companyDecideQuote: (quoteId: string, decision: 'ACCEPT' | 'DECLINE', expectedVersion: number) => Promise<void>;
+  staffGenerateInvoice: (acceptedQuoteId: string) => Promise<void>;
+  staffRecordReceipt: (invoiceId: string, amount: number, externalReference: string) => Promise<void>;
+  updateMyProfile: (patch: Record<string, unknown>) => Promise<void>;
   resetToDefaults: () => void;
   refreshServerData: () => Promise<void>;
 }
@@ -158,6 +178,9 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(INITIAL_SUPPORT_TICKETS);
   const [invoices, setInvoices] = useState<KaziInvoice[]>(INITIAL_INVOICES);
+  const [quotes, setQuotes] = useState<ServiceQuote[]>([]);
+  const [replacements, setReplacements] = useState<ReplacementItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>(INITIAL_AUDIT_LOGS);
 
   // Apply theme to DOM upon mount and changes
@@ -344,112 +367,208 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       }
 
-      // 5. Fetch Invoices for Staff or Company
+      // 5. Fetch Quotes & Invoices for Staff or Company
       if (currentUser?.role === 'STAFF') {
         try {
+          const qs = await operationsApi.listQuotes();
+          if (Array.isArray(qs)) {
+            setQuotes(qs);
+          }
+        } catch {}
+        try {
           const invs = await operationsApi.listInvoices();
-          if (Array.isArray(invs) && invs.length > 0) {
+          if (Array.isArray(invs)) {
             setInvoices(
               invs.map((i: any) => ({
                 id: i.invoiceNumber || i.id,
+                invoiceId: i.id,
+                quoteId: i.quoteId,
                 companyId: i.companyId || i.company_id || 'company-a',
                 companyName: i.partyTaxSnapshot?.legalName || 'BTP Horizon Gabon',
-                missionId: i.missionId || 'mission-demo-01',
+                missionId: i.missionId || 'mission-01',
                 missionTitle: 'Mission Kazi',
                 serviceFeeXAF: Number(i.subtotalAmount || i.subtotal_amount || 45000),
                 vatXAF: Number(i.taxAmount || i.tax_amount || 8100),
                 totalXAF: Number(i.totalAmount || i.total_amount || 53100),
-                status: i.status === 'PAID' ? 'PAID' : i.status === 'ISSUED' ? 'ISSUED' : 'SAMPLE',
-                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-20',
+                paidAmountXAF: Number(i.paidAmount || 0),
+                status:
+                  i.status === 'PAID'
+                    ? 'PAID'
+                    : i.status === 'PARTIALLY_PAID'
+                    ? 'PARTIALLY_PAID'
+                    : i.status === 'ISSUED'
+                    ? 'ISSUED'
+                    : 'SAMPLE',
+                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-24',
                 isPrototypeSample: i.isSampleWatermark !== false,
+                version: Number(i.version || 1),
               }))
             );
           }
         } catch {}
       } else if (currentUser?.role === 'COMPANY' && currentUser.companyId) {
         try {
+          const qs = await operationsApi.listCompanyQuotes(currentUser.companyId);
+          if (Array.isArray(qs)) {
+            setQuotes(qs);
+          }
+        } catch {}
+        try {
           const invs = await operationsApi.listCompanyInvoices(currentUser.companyId);
-          if (Array.isArray(invs) && invs.length > 0) {
+          if (Array.isArray(invs)) {
             setInvoices(
               invs.map((i: any) => ({
                 id: i.invoiceNumber || i.id,
+                invoiceId: i.id,
+                quoteId: i.quoteId,
                 companyId: i.companyId || i.company_id || currentUser.companyId!,
                 companyName: i.partyTaxSnapshot?.legalName || 'BTP Horizon Gabon',
-                missionId: i.missionId || 'mission-demo-01',
+                missionId: i.missionId || 'mission-01',
                 missionTitle: 'Mission Kazi',
                 serviceFeeXAF: Number(i.subtotalAmount || i.subtotal_amount || 45000),
                 vatXAF: Number(i.taxAmount || i.tax_amount || 8100),
                 totalXAF: Number(i.totalAmount || i.total_amount || 53100),
-                status: i.status === 'PAID' ? 'PAID' : i.status === 'ISSUED' ? 'ISSUED' : 'SAMPLE',
-                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-20',
+                paidAmountXAF: Number(i.paidAmount || 0),
+                status:
+                  i.status === 'PAID'
+                    ? 'PAID'
+                    : i.status === 'PARTIALLY_PAID'
+                    ? 'PARTIALLY_PAID'
+                    : i.status === 'ISSUED'
+                    ? 'ISSUED'
+                    : 'SAMPLE',
+                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-24',
                 isPrototypeSample: i.isSampleWatermark !== false,
+                version: Number(i.version || 1),
               }))
             );
           }
         } catch {}
       }
 
-      // 6. Fetch Attendance
-      try {
-        const attList = await operationsApi.listAttendance();
-        if (Array.isArray(attList) && attList.length > 0) {
-          setAttendance((prev) => {
-            const map = new Map<string, any>();
-            for (const a of prev) map.set(a.id, a);
-            for (const a of attList) map.set(a.id, a);
-            return Array.from(map.values());
-          });
-        }
-      } catch {}
+      // 6. Fetch Attendance (replace directly from server database, no sample fixture mixing)
+      if (currentUser) {
+        try {
+          const attList = await operationsApi.listAttendance();
+          if (Array.isArray(attList)) {
+            setAttendance(attList);
+          }
+        } catch {}
+      }
 
-      // 7. Fetch Support Cases
-      try {
-        const cases = await operationsApi.listSupportCases();
-        if (Array.isArray(cases) && cases.length > 0) {
-          const mappedTickets: SupportTicket[] = await Promise.all(
-            cases.map(async (c: any) => {
-              let messages: any[] = [];
-              try {
-                const thread = await operationsApi.getSupportCase(c.id);
-                if (thread?.messages) {
-                  messages = thread.messages.map((m: any) => ({
-                    id: m.id,
-                    senderRole: m.authorRole,
-                    senderName: m.authorName || m.authorRole,
-                    content: m.body,
-                    timestamp: new Date(m.createdAt).toISOString(),
-                    isStaffInternal: m.visibility === 'STAFF_ONLY',
-                  }));
-                }
-              } catch {}
-              return {
-                id: c.id,
-                creatorRole: (c.workerId ? 'WORKER' : 'COMPANY') as any,
-                creatorId: c.workerId || c.companyId || c.reporterUserId,
-                creatorName: c.reporterUserId,
-                subject: c.subject,
-                status: (c.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : c.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN') as any,
-                missionId: c.missionId || 'mission-demo-01',
-                messages: messages.length > 0 ? messages : [
-                  {
-                    id: `msg-${c.id}-init`,
-                    senderRole: (c.workerId ? 'WORKER' : 'COMPANY') as any,
-                    senderName: c.reporterUserId,
-                    content: c.subject,
-                    timestamp: new Date(c.createdAt || Date.now()).toISOString(),
-                  },
-                ],
+      // 7. Fetch Support Cases (replace directly from server database, no sample fixture mixing)
+      if (currentUser) {
+        try {
+          const cases = await operationsApi.listSupportCases();
+          if (Array.isArray(cases)) {
+            const mappedTickets: SupportTicket[] = await Promise.all(
+              cases.map(async (c: any) => {
+                let messages: any[] = [];
+                try {
+                  const thread = await operationsApi.getSupportCase(c.id);
+                  if (thread?.messages) {
+                    messages = thread.messages.map((m: any) => ({
+                      id: m.id,
+                      senderRole: m.authorRole,
+                      senderName: m.authorName || m.authorRole,
+                      content: m.body,
+                      timestamp: new Date(m.createdAt).toISOString(),
+                      isStaffInternal: m.visibility === 'STAFF_ONLY',
+                    }));
+                  }
+                } catch {}
+                return {
+                  id: c.id,
+                  creatorRole: (c.workerId ? 'WORKER' : 'COMPANY') as any,
+                  creatorId: c.workerId || c.companyId || c.reporterUserId,
+                  creatorName: c.reporterUserId,
+                  category: c.category,
+                  subject: c.subject,
+                  status: (c.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : c.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN') as any,
+                  missionId: c.missionId || 'mission-01',
+                  version: Number(c.version || 1),
+                  messages,
+                };
+              })
+            );
+            setSupportTickets(mappedTickets);
+          }
+        } catch {}
+      }
+
+      // 8. Fetch In-App Notifications
+      if (currentUser) {
+        try {
+          const notifs = await operationsApi.getMyNotifications();
+          if (Array.isArray(notifs)) {
+            setNotifications(notifs);
+          }
+        } catch {}
+      }
+
+      // 9. Fetch Replacement Requests (Company & Staff)
+      if (currentUser?.role === 'COMPANY' || currentUser?.role === 'STAFF') {
+        try {
+          const reps = await operationsApi.listReplacements();
+          if (Array.isArray(reps)) {
+            setReplacements(reps);
+          }
+        } catch {}
+      }
+
+      // 10. Fetch Live Profile & Statistics
+      if (currentUser) {
+        try {
+          const profile = await operationsApi.getMyProfile();
+          if (profile?.role === 'WORKER') {
+            setWorkers((prev) => {
+              const parts = String(profile.displayName || 'Paul Mba').split(' ');
+              const firstName = parts[0] || 'Paul';
+              const lastName = parts.slice(1).join(' ') || 'Mba';
+              const existing = prev.find((w) => w.id === profile.id) || prev[0];
+              const updated: WorkerPrivateProfile = {
+                ...existing,
+                id: profile.id,
+                firstName,
+                lastName,
+                lastNameInitial: `${lastName.charAt(0)}.`,
+                phone: profile.phone || existing?.phone || '+24101000000',
+                primaryTrade: profile.tradeCodes?.[0] || existing?.primaryTrade || 'Coffreur',
+                skills: profile.tradeCodes?.length ? profile.tradeCodes : existing?.skills || ['Coffreur'],
+                commune: profile.areaCode || existing?.commune || 'Libreville',
+                completedMissionsCount: Number(profile.completedMissionsCount ?? existing?.completedMissionsCount ?? 1),
+                attendanceRate: Number(profile.attendanceRate ?? existing?.attendanceRate ?? 100),
+                verifiedStatus: profile.profileStatus === 'ACTIVE' ? 'VERIFIED' : 'PENDING',
+                availableNow: (profile.availabilityCode || 'AVAILABLE') === 'AVAILABLE',
+                cniNumber: existing?.cniNumber || 'CNI-GA-VERIFIED',
+                internalNotes: existing?.internalNotes || [],
               };
-            })
-          );
-          setSupportTickets((prev) => {
-            const map = new Map<string, SupportTicket>();
-            for (const t of prev) map.set(t.id, t);
-            for (const t of mappedTickets) map.set(t.id, t);
-            return Array.from(map.values());
-          });
-        }
-      } catch {}
+              const hasId = prev.some((w) => w.id === profile.id);
+              return hasId ? prev.map((w) => (w.id === profile.id ? updated : w)) : [updated, ...prev];
+            });
+          } else if (profile?.role === 'COMPANY') {
+            setCompanies((prev) => {
+              const existing = prev.find((c) => c.id === profile.id) || prev[0];
+              const updated: Company = {
+                ...existing,
+                id: profile.id,
+                name: profile.legalName || existing?.name || 'BTP Horizon Gabon',
+                rccm: profile.registrationReference || existing?.rccm || 'RG/FCV 2021 B 1409',
+                nif: profile.taxReference || existing?.nif || '098432-A',
+                tradeSector: profile.tradeSector || existing?.tradeSector || 'Génie Civil & BTP',
+                commune: profile.areaCode || existing?.commune || 'Libreville',
+                contactName: existing?.contactName || 'Marc Ndong',
+                email: profile.contactEmail || existing?.email || 'contact@btphorizon.ga',
+                phone: existing?.phone || '+241 01 72 44 00',
+                verificationStatus: profile.verificationStatus || 'VERIFIED',
+                joinedDate: existing?.joinedDate || '2026-11-01',
+              };
+              const hasId = prev.some((c) => c.id === profile.id);
+              return hasId ? prev.map((c) => (c.id === profile.id ? updated : c)) : [updated, ...prev];
+            });
+          }
+        } catch {}
+      }
     } catch (err: any) {
       console.warn('[Kazi Data] Notice on initial data fetch:', err.message);
     }
@@ -847,34 +966,88 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [proposals, showToast]
   );
 
-  // 8. Attendance, disputes & billing
+  // 8. Attendance, disputes, replacements, support, notifications & billing
   const companyDeclareAttendance = useCallback(
     async (recordId: string, status: AttendanceStatus, hours: number, note: string) => {
       try {
-        await operationsApi.updateAttendance(recordId, status === 'PRESENT' ? 'PRESENT' : 'ABSENT', undefined, note);
+        const target = attendance.find((r) => r.id === recordId || r.assignmentDayId === recordId);
+        const dayOrAttId = target?.assignmentDayId || recordId;
+        const expectedVersion = target?.version || 1;
+        const workedMinutes = status === 'PARTIAL' ? Math.max(30, Math.round(hours * 60)) : status === 'PRESENT' ? 480 : undefined;
+
+        const updated = await operationsApi.updateAttendance(
+          dayOrAttId,
+          status,
+          workedMinutes,
+          note,
+          expectedVersion
+        );
         setAttendance((prev) =>
           prev.map((rec) =>
-            rec.id === recordId
-              ? { ...rec, companyStatus: status, hoursWorked: hours, companyNote: note, reviewState: 'SUBMITTED_BY_COMPANY' }
+            rec.id === recordId || rec.assignmentDayId === recordId
+              ? {
+                  ...rec,
+                  companyStatus: status,
+                  hoursWorked: hours,
+                  companyNote: note,
+                  workerAgreed: null,
+                  reviewState: 'SUBMITTED_BY_COMPANY',
+                  declarationRevision: updated?.declarationRevision ?? (rec.declarationRevision || 0) + 1,
+                  version: updated?.version ?? (rec.version || 1) + 1,
+                }
               : rec
           )
         );
-        showToast('success', 'Pointage enregistré', 'Pointage enregistré en base de données.');
+        showToast('success', 'Pointage enregistré (KZ10)', 'Pointage enregistré en base de données.');
       } catch (err: any) {
         showToast('error', 'Erreur pointage', err.message);
       }
     },
-    [showToast]
+    [attendance, showToast]
+  );
+
+  const workerConfirmAttendance = useCallback(
+    async (recordId: string) => {
+      try {
+        const target = attendance.find((r) => r.id === recordId);
+        const revision = target?.declarationRevision || 1;
+        const updated = await operationsApi.confirmAttendance(recordId, revision);
+        setAttendance((prev) =>
+          prev.map((rec) =>
+            rec.id === recordId
+              ? {
+                  ...rec,
+                  workerAgreed: true,
+                  reviewState: 'CONFIRMED',
+                  version: updated?.version ?? (rec.version || 1) + 1,
+                }
+              : rec
+          )
+        );
+        showToast('success', 'Pointage confirmé', 'Votre présence a été validée.');
+      } catch (err: any) {
+        showToast('error', 'Erreur confirmation', err.message);
+      }
+    },
+    [attendance, showToast]
   );
 
   const workerDisputeAttendance = useCallback(
     async (recordId: string, disputeNote: string) => {
       try {
-        await operationsApi.disputeAttendance(recordId, disputeNote);
+        const target = attendance.find((r) => r.id === recordId);
+        const revision = target?.declarationRevision || 1;
+        const updated = await operationsApi.disputeAttendance(recordId, disputeNote, revision);
         setAttendance((prev) =>
           prev.map((rec) =>
             rec.id === recordId
-              ? { ...rec, workerAgreed: false, workerDisputeNote: disputeNote, reviewState: 'DISPUTED' }
+              ? {
+                  ...rec,
+                  workerAgreed: false,
+                  workerDisputeNote: disputeNote,
+                  reviewState: 'DISPUTED',
+                  version: updated?.version ?? (rec.version || 1) + 1,
+                }
               : rec
           )
         );
@@ -883,49 +1056,109 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         showToast('error', 'Erreur contestation', err.message);
       }
     },
-    [showToast]
+    [attendance, showToast]
   );
 
   const adminResolveDispute = useCallback(
     async (recordId: string, resolvedStatus: AttendanceStatus, note: string) => {
       try {
-        await operationsApi.resolveDispute(
+        const target = attendance.find((r) => r.id === recordId);
+        const expectedVersion = target?.version || 1;
+        const workedMinutes = resolvedStatus === 'PARTIAL' ? 240 : undefined;
+        const updated = await operationsApi.resolveDispute(
           recordId,
-          resolvedStatus === 'PRESENT' ? 'CONFIRMED_PRESENT' : 'CONFIRMED_ABSENT',
-          note
+          resolvedStatus,
+          note,
+          expectedVersion,
+          workedMinutes
         );
         setAttendance((prev) =>
           prev.map((rec) =>
             rec.id === recordId
-              ? { ...rec, companyStatus: resolvedStatus, reviewState: 'RESOLVED_BY_STAFF', staffResolutionNote: note, workerAgreed: true }
+              ? {
+                  ...rec,
+                  companyStatus: resolvedStatus,
+                  hoursWorked: resolvedStatus === 'PARTIAL' ? 4 : resolvedStatus === 'PRESENT' ? 8 : 0,
+                  reviewState: 'RESOLVED_BY_STAFF',
+                  staffResolutionNote: note,
+                  workerAgreed: true,
+                  version: updated?.version ?? (rec.version || 1) + 1,
+                }
               : rec
           )
         );
-        showToast('success', 'Litige résolu', 'Décision d’arbitrage enregistrée dans SQLite.');
+        showToast('success', 'Litige résolu', 'Décision d’arbitrage enregistrée en base de données.');
       } catch (err: any) {
         showToast('error', 'Erreur arbitrage', err.message);
+      }
+    },
+    [attendance, showToast]
+  );
+
+  const adminRequestReplacement = useCallback(
+    async (assignmentId: string, absentWorkerId: string, dates: string[], reason?: string) => {
+      try {
+        const targetAtt = attendance.find((a) => a.assignmentId === assignmentId);
+        const missionId = targetAtt?.missionId || selectedMissionId || 'mission-01';
+        const created = await operationsApi.createReplacement({
+          assignmentId,
+          missionId,
+          workerId: absentWorkerId,
+          affectedDayIds: dates.length > 0 ? dates : ['day-01'],
+          reasonCode: 'WORKER_ABSENT',
+          note: reason || `Remplacement demandé pour ${dates.length} date(s).`,
+        });
+        if (created) {
+          setReplacements((prev) => [created, ...prev]);
+        }
+        showToast('success', 'Remplacement enregistré (KZ11)', `Demande de remplacement enregistrée sans réservation fictive.`);
+      } catch (err: any) {
+        showToast('error', 'Erreur remplacement', err.message);
+      }
+    },
+    [attendance, selectedMissionId, showToast]
+  );
+
+  const adminConfirmReplacement = useCallback(
+    async (requestId: string, replacementAssignmentId: string, expectedVersion: number) => {
+      try {
+        const confirmed = await operationsApi.confirmReplacement(
+          requestId,
+          replacementAssignmentId,
+          expectedVersion
+        );
+        setReplacements((prev) =>
+          prev.map((r) => (r.id === requestId ? { ...r, ...confirmed, status: 'CONFIRMED' } : r))
+        );
+        showToast('success', 'Remplacement confirmé', 'Nouvelle affectation liée avec succès.');
+      } catch (err: any) {
+        showToast('error', 'Erreur confirmation remplacement', err.message);
       }
     },
     [showToast]
   );
 
-  const adminRequestReplacement = useCallback(
-    async (assignmentId: string, absentWorkerId: string, dates: string[]) => {
+  const createSupportTicket = useCallback(
+    async (
+      category: 'CHANTIER' | 'PAIEMENT' | 'POINTAGE' | 'ACCES',
+      subject: string,
+      initialMessage: string,
+      missionId?: string
+    ) => {
       try {
-        await operationsApi.createReplacement({
-          assignmentId,
-          missionId: 'mission-demo-01',
-          workerId: absentWorkerId,
-          affectedDayIds: dates.length > 0 ? dates : ['day-01'],
-          reasonCode: 'WORKER_ABSENT',
-          note: `Remplacement demandé par staff pour ${dates.length} date(s).`,
+        const created = await operationsApi.createSupportCase({
+          category,
+          subject,
+          initialMessage,
+          missionId,
         });
-        showToast('success', 'Remplacement enregistré', `Demande de remplacement enregistrée pour ${absentWorkerId}.`);
-      } catch {
-        showToast('info', 'Remplacement engagé', `Recherche de remplaçant sur ${dates.length} date(s).`);
+        await refreshServerData();
+        showToast('success', 'Dossier support ouvert', `Dossier "${created?.subject || subject}" créé.`);
+      } catch (err: any) {
+        showToast('error', 'Erreur création dossier', err.message);
       }
     },
-    [showToast]
+    [refreshServerData, showToast]
   );
 
   const sendSupportMessage = useCallback(
@@ -942,7 +1175,7 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                     {
                       id: `msg-${Date.now()}`,
                       senderRole: (role === 'ADMIN' ? 'STAFF' : role === 'SPECIMENS' ? 'STAFF' : role) as 'WORKER' | 'COMPANY' | 'STAFF',
-                      senderName: currentUser?.email || 'Moi',
+                      senderName: currentUser?.email || currentUser?.phone || 'Moi',
                       content,
                       timestamp: new Date().toISOString(),
                       isStaffInternal: isInternal,
@@ -952,12 +1185,111 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               : ticket
           )
         );
-        showToast('success', 'Message envoyé', 'Votre message a été transmis.');
+        showToast('success', 'Message envoyé', 'Votre message a été enregistré.');
       } catch (err: any) {
         showToast('error', 'Erreur support', err.message);
       }
     },
     [currentUser, role, showToast]
+  );
+
+  const markNotificationRead = useCallback(
+    async (notificationId: string) => {
+      try {
+        await operationsApi.markNotificationRead(notificationId);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notificationId ? { ...n, readAt: Date.now() } : n))
+        );
+      } catch (err: any) {
+        showToast('error', 'Erreur notification', err.message);
+      }
+    },
+    [showToast]
+  );
+
+  const staffCreateAndSendQuote = useCallback(
+    async (companyId: string, missionId: string, description: string, unitAmount: number) => {
+      try {
+        const draft = await operationsApi.createQuote({
+          companyId,
+          missionId,
+          lines: [{ description, quantity: 1, unitAmount, taxRate: 0.18 }],
+        });
+        if (draft?.id) {
+          await operationsApi.sendQuote(draft.id, draft.version || 1);
+        }
+        await refreshServerData();
+        showToast('success', 'Devis créé et transmis', 'Le devis de service Kazi a été envoyé à l’entreprise.');
+      } catch (err: any) {
+        showToast('error', 'Erreur devis', err.message);
+      }
+    },
+    [refreshServerData, showToast]
+  );
+
+  const companyDecideQuote = useCallback(
+    async (quoteId: string, decision: 'ACCEPT' | 'DECLINE', expectedVersion: number) => {
+      try {
+        await operationsApi.decideQuote(quoteId, decision, expectedVersion);
+        await refreshServerData();
+        showToast(
+          'success',
+          decision === 'ACCEPT' ? 'Devis accepté' : 'Devis refusé',
+          'Votre décision sur le devis de prestation Kazi a été enregistrée.'
+        );
+      } catch (err: any) {
+        showToast('error', 'Erreur décision devis', err.message);
+      }
+    },
+    [refreshServerData, showToast]
+  );
+
+  const staffGenerateInvoice = useCallback(
+    async (acceptedQuoteId: string) => {
+      try {
+        const comp = companies[0];
+        await operationsApi.createInvoiceFromQuote({
+          acceptedQuoteId,
+          partyTaxSnapshot: {
+            rccm: comp?.rccm || 'RG/FCV 2021 B 1409',
+            nif: comp?.nif || '098432-A',
+            legalName: comp?.name || 'BTP Horizon Gabon',
+            billingAddress: 'Zone Industrielle Oloumi, Libreville',
+          },
+        });
+        await refreshServerData();
+        showToast('success', 'Facture SAMPLE émise', 'Facture de service générée avec filigrane SAMPLE.');
+      } catch (err: any) {
+        showToast('error', 'Erreur facturation', err.message);
+      }
+    },
+    [companies, refreshServerData, showToast]
+  );
+
+  const staffRecordReceipt = useCallback(
+    async (invoiceId: string, amount: number, externalReference: string) => {
+      try {
+        await operationsApi.recordReceipt(invoiceId, amount, externalReference);
+        await refreshServerData();
+        showToast('success', 'Reçu bancaire enregistré', `Paiement hors-ligne (${externalReference}) imputé sur la facture.`);
+      } catch (err: any) {
+        showToast('error', 'Erreur reçu', err.message);
+      }
+    },
+    [refreshServerData, showToast]
+  );
+
+  const updateMyProfile = useCallback(
+    async (patch: Record<string, unknown>) => {
+      try {
+        await operationsApi.updateMyProfile(patch);
+        await refreshServerData();
+        showToast('success', 'Profil mis à jour', 'Les informations de votre profil ont été sauvegardées.');
+      } catch (err: any) {
+        showToast('error', 'Erreur profil', err.message);
+      }
+    },
+    [refreshServerData, showToast]
   );
 
   const resetToDefaults = useCallback(() => {
@@ -1002,6 +1334,9 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         attendance,
         supportTickets,
         invoices,
+        quotes,
+        replacements,
+        notifications,
         auditLogs,
         toast,
         showToast,
@@ -1015,10 +1350,19 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         adminModerateRequest,
         adminProposeCandidates,
         companyDeclareAttendance,
+        workerConfirmAttendance,
         workerDisputeAttendance,
         adminResolveDispute,
         adminRequestReplacement,
+        adminConfirmReplacement,
+        createSupportTicket,
         sendSupportMessage,
+        markNotificationRead,
+        staffCreateAndSendQuote,
+        companyDecideQuote,
+        staffGenerateInvoice,
+        staffRecordReceipt,
+        updateMyProfile,
         resetToDefaults,
         refreshServerData,
       }}

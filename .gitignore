@@ -37,6 +37,8 @@ build/
 .vite/
 .next/
 *.tsbuildinfo
+test-results/
+playwright-report/
 
 # Debug logs & Diagnostic dumps
 logs/

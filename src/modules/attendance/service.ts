@@ -17,6 +17,8 @@ export interface AttendanceRecord {
   missionId: string;
   companyId: string;
   workerId: string;
+  workerName?: string;
+  missionTitle?: string;
   localDate: string;
   declaredStatus: AttendanceStatus;
   workedMinutes?: number;
@@ -72,6 +74,8 @@ function mapDbRowToAttendance(row: any): AttendanceRecord {
     missionId: row.mission_id || '',
     companyId: row.company_id || '',
     workerId: row.worker_id || '',
+    workerName: row.worker_name || undefined,
+    missionTitle: row.mission_title || undefined,
     localDate: row.local_date || (row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : '2026-12-01'),
     declaredStatus: (row.declared_status as AttendanceStatus) || 'NOT_RECORDED',
     workedMinutes: row.worked_minutes != null ? Number(row.worked_minutes) : undefined,
@@ -219,12 +223,11 @@ export function listAttendanceByMission(missionId: string): AttendanceRecord[] {
 }
 
 export function listAttendanceByWorker(workerId: string): AttendanceRecord[] {
-  const mem = Array.from(attendanceStore.values()).filter((a) => a.workerId === workerId);
-  if (mem.length > 0) return mem;
   try {
     const rows = query<any>(
       `SELECT
         a.id, a.assignment_day_id, ad.assignment_id, ad.worker_id, asgn.mission_id, m.company_id,
+        wp.display_name as worker_name, mt.title as mission_title,
         substr(ad.starts_at, 1, 10) as local_date, a.declared_status, a.worked_minutes, a.declared_by,
         a.declaration_revision, a.worker_decision, a.worker_confirmed_revision, a.resolution_status,
         a.resolved_by, a.reason, a.version, a.created_at, a.updated_at
@@ -232,18 +235,22 @@ export function listAttendanceByWorker(workerId: string): AttendanceRecord[] {
       LEFT JOIN assignment_days ad ON a.assignment_day_id = ad.id
       LEFT JOIN assignments asgn ON ad.assignment_id = asgn.id
       LEFT JOIN missions m ON asgn.mission_id = m.id
+      LEFT JOIN worker_profiles wp ON ad.worker_id = wp.id
+      LEFT JOIN mission_terms mt ON asgn.terms_id = mt.id
       WHERE ad.worker_id = ?;`,
       [workerId]
     );
     if (rows && rows.length > 0) {
       const mappedList = rows.map(mapDbRowToAttendance);
       for (const item of mappedList) {
-        attendanceStore.set(item.id, item);
+        const cached = attendanceStore.get(item.id);
+        const merged = cached ? { ...item, ...cached, workerName: item.workerName || cached.workerName, missionTitle: item.missionTitle || cached.missionTitle } : item;
+        attendanceStore.set(merged.id, merged);
       }
-      return mappedList;
+      return rows.map((r) => attendanceStore.get(r.id)!);
     }
   } catch {}
-  return [];
+  return Array.from(attendanceStore.values()).filter((a) => a.workerId === workerId);
 }
 
 export function listAllAttendance(): AttendanceRecord[] {
@@ -251,6 +258,7 @@ export function listAllAttendance(): AttendanceRecord[] {
     const rows = query<any>(
       `SELECT
         a.id, a.assignment_day_id, ad.assignment_id, ad.worker_id, asgn.mission_id, m.company_id,
+        wp.display_name as worker_name, mt.title as mission_title,
         substr(ad.starts_at, 1, 10) as local_date, a.declared_status, a.worked_minutes, a.declared_by,
         a.declaration_revision, a.worker_decision, a.worker_confirmed_revision, a.resolution_status,
         a.resolved_by, a.reason, a.version, a.created_at, a.updated_at
@@ -258,14 +266,18 @@ export function listAllAttendance(): AttendanceRecord[] {
       LEFT JOIN assignment_days ad ON a.assignment_day_id = ad.id
       LEFT JOIN assignments asgn ON ad.assignment_id = asgn.id
       LEFT JOIN missions m ON asgn.mission_id = m.id
+      LEFT JOIN worker_profiles wp ON ad.worker_id = wp.id
+      LEFT JOIN mission_terms mt ON asgn.terms_id = mt.id
       ORDER BY a.created_at DESC;`
     );
     if (rows && rows.length > 0) {
       const mappedList = rows.map(mapDbRowToAttendance);
       for (const item of mappedList) {
-        attendanceStore.set(item.id, item);
+        const cached = attendanceStore.get(item.id);
+        const merged = cached ? { ...item, ...cached, workerName: item.workerName || cached.workerName, missionTitle: item.missionTitle || cached.missionTitle } : item;
+        attendanceStore.set(merged.id, merged);
       }
-      return mappedList;
+      return rows.map((r) => attendanceStore.get(r.id)!);
     }
   } catch {}
   return Array.from(attendanceStore.values());
@@ -276,6 +288,7 @@ export function listAttendanceByCompany(companyId: string): AttendanceRecord[] {
     const rows = query<any>(
       `SELECT
         a.id, a.assignment_day_id, ad.assignment_id, ad.worker_id, asgn.mission_id, m.company_id,
+        wp.display_name as worker_name, mt.title as mission_title,
         substr(ad.starts_at, 1, 10) as local_date, a.declared_status, a.worked_minutes, a.declared_by,
         a.declaration_revision, a.worker_decision, a.worker_confirmed_revision, a.resolution_status,
         a.resolved_by, a.reason, a.version, a.created_at, a.updated_at
@@ -283,6 +296,8 @@ export function listAttendanceByCompany(companyId: string): AttendanceRecord[] {
       LEFT JOIN assignment_days ad ON a.assignment_day_id = ad.id
       LEFT JOIN assignments asgn ON ad.assignment_id = asgn.id
       LEFT JOIN missions m ON asgn.mission_id = m.id
+      LEFT JOIN worker_profiles wp ON ad.worker_id = wp.id
+      LEFT JOIN mission_terms mt ON asgn.terms_id = mt.id
       WHERE m.company_id = ?
       ORDER BY a.created_at DESC;`,
       [companyId]
@@ -290,9 +305,11 @@ export function listAttendanceByCompany(companyId: string): AttendanceRecord[] {
     if (rows && rows.length > 0) {
       const mappedList = rows.map(mapDbRowToAttendance);
       for (const item of mappedList) {
-        attendanceStore.set(item.id, item);
+        const cached = attendanceStore.get(item.id);
+        const merged = cached ? { ...item, ...cached, workerName: item.workerName || cached.workerName, missionTitle: item.missionTitle || cached.missionTitle } : item;
+        attendanceStore.set(merged.id, merged);
       }
-      return mappedList;
+      return rows.map((r) => attendanceStore.get(r.id)!);
     }
   } catch {}
   return Array.from(attendanceStore.values()).filter((a) => a.companyId === companyId);
@@ -338,7 +355,7 @@ export function recordCompanyAttendance(
   note?: string,
   expectedVersion: number = 1
 ): { success: boolean; attendance?: AttendanceRecord; errorCode?: string; errorMessage?: string } {
-  let record = getAttendanceByDayId(assignmentDayId);
+  let record = getAttendanceByDayId(assignmentDayId) || getAttendanceById(assignmentDayId);
   if (!record) {
     return { success: false, errorCode: 'ATTENDANCE_NOT_FOUND', errorMessage: 'Fiche de présence introuvable pour cette journée.' };
   }
@@ -692,6 +709,53 @@ export function getReplacementRequestById(requestId: string): ReplacementRequest
     }
   } catch {}
   return null;
+}
+
+export function listReplacementRequests(companyId?: string): ReplacementRequestRecord[] {
+  try {
+    const rows = companyId
+      ? query<any>(
+          `SELECT r.*, a.mission_id, a.worker_id, m.company_id
+           FROM replacement_requests r
+           LEFT JOIN assignments a ON r.original_assignment_id = a.id
+           LEFT JOIN missions m ON a.mission_id = m.id
+           WHERE m.company_id = ?
+           ORDER BY r.created_at DESC;`,
+          [companyId]
+        )
+      : query<any>(
+          `SELECT r.*, a.mission_id, a.worker_id, m.company_id
+           FROM replacement_requests r
+           LEFT JOIN assignments a ON r.original_assignment_id = a.id
+           LEFT JOIN missions m ON a.mission_id = m.id
+           ORDER BY r.created_at DESC;`
+        );
+    if (rows && rows.length > 0) {
+      for (const row of rows) {
+        if (!replacementStore.has(row.id)) {
+          replacementStore.set(row.id, {
+            id: row.id,
+            originalAssignmentId: row.original_assignment_id,
+            missionId: row.mission_id || '',
+            companyId: row.company_id || companyId || '',
+            workerId: row.worker_id || '',
+            affectedDayIds: [],
+            requestedBy: row.requested_by,
+            reasonCode: row.reason_code,
+            note: row.note || undefined,
+            status: row.status,
+            replacementAssignmentId: row.replacement_assignment_id || undefined,
+            version: Number(row.version),
+            createdAt: new Date(row.created_at).getTime(),
+            updatedAt: new Date(row.updated_at).getTime(),
+          });
+        }
+      }
+    }
+  } catch {}
+
+  const all = Array.from(replacementStore.values());
+  return companyId ? all.filter((r) => r.companyId === companyId) : all;
 }
 
 export function staffConfirmReplacement(

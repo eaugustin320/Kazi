@@ -17,8 +17,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Worker Form State
-  const isDev = Boolean(import.meta.env?.DEV);
+  // Worker Form State (strictly disabled in production build mode)
+  const isDev = Boolean(import.meta.env?.DEV) && import.meta.env?.MODE !== 'production';
   const [workerPhone, setWorkerPhone] = useState(isDev ? '+24101000000' : '');
   const [workerOtp, setWorkerOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);

@@ -47,11 +47,18 @@ export const AdminView: React.FC = () => {
     assignments,
     attendance,
     invoices,
+    quotes,
+    replacements,
     auditLogs,
     adminModerateRequest,
     adminProposeCandidates,
     adminFinalizeAssignment,
     adminResolveDispute,
+    adminRequestReplacement,
+    adminConfirmReplacement,
+    staffCreateAndSendQuote,
+    staffGenerateInvoice,
+    staffRecordReceipt,
   } = usePrototype();
 
   const [selectedReqId, setSelectedReqId] = useState<string>('req-02');
@@ -531,6 +538,83 @@ export const AdminView: React.FC = () => {
                 />
               ))
             )}
+
+            {/* Replacement Requests Management (KZ11) */}
+            <div style={{ marginTop: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 700 }}>
+                  Demandes de Remplacement d’Ouvriers (KZ11) ({replacements.length})
+                </h4>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    adminRequestReplacement(
+                      'assign-01',
+                      'wp_worker-01',
+                      ['day-02'],
+                      'Demande de remplacement initiée par le recruteur Kazi'
+                    )
+                  }
+                >
+                  Ouvrir une demande de remplacement
+                </Button>
+              </div>
+
+              {replacements.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-card)', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                  Aucune demande de remplacement en attente.
+                </div>
+              ) : (
+                replacements.map((rep) => (
+                  <div
+                    key={rep.id}
+                    style={{
+                      padding: '14px 16px',
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-card)',
+                      marginBottom: '10px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '14px' }}>
+                        Remplacement #{rep.id.slice(0, 8)} &middot; Affectation : {rep.originalAssignmentId}
+                      </strong>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                        Ouvrier : {rep.workerId} &middot; Motif : {rep.reasonCode} {rep.note ? `— ${rep.note}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <StatusBadge
+                        label={rep.status}
+                        variant={rep.status === 'CONFIRMED' ? 'success' : 'warning'}
+                      />
+                      {rep.status !== 'CONFIRMED' && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() =>
+                            adminConfirmReplacement(
+                              rep.id,
+                              `assign-repl-${rep.id.slice(0, 6)}`,
+                              rep.version || 1
+                            )
+                          }
+                        >
+                          Confirmer affectation remplaçant
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -540,11 +624,70 @@ export const AdminView: React.FC = () => {
             <PageHeader
               title="Facturation Kazi & Reçus Opérationnels (KZ14)"
               subtitle="Gestion des honoraires de service Kazi (Interdiction absolue d'inclure les salaires ouvriers)"
+              actions={
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() =>
+                    staffCreateAndSendQuote(
+                      'company-a',
+                      'mission-01',
+                      'Honoraires de sélection & suivi opérationnel Kazi',
+                      40000
+                    )
+                  }
+                >
+                  Créer & Envoyer Devis Kazi (40 000 FCFA HT)
+                </Button>
+              }
             />
 
             <Alert type="warning" title="Spécimen de prototype (SAMPLE)">
               Toutes les factures générées à ce stade comportent la mention SAMPLE. L'émission réelle débutera après validation des décisions juridiques et fiscales du propriétaire (DECISIONS.md).
             </Alert>
+
+            {quotes.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '10px' }}>
+                  Devis de Service Kazi ({quotes.length})
+                </h4>
+                {quotes.map((q) => (
+                  <div
+                    key={q.id}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-card)',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '13px' }}>Devis #{q.id.slice(0, 12)}</strong> &middot;{' '}
+                      <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                        HT : {Number(q.serviceAmount).toLocaleString('fr-GA')} FCFA &middot; TVA : {Number(q.taxAmount).toLocaleString('fr-GA')} FCFA &middot; TTC : <strong>{Number(q.totalAmount).toLocaleString('fr-GA')} FCFA</strong>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <StatusBadge
+                        label={q.status}
+                        variant={q.status === 'ACCEPTED' ? 'success' : q.status === 'SENT' ? 'info' : 'neutral'}
+                      />
+                      {q.status === 'ACCEPTED' && (
+                        <Button size="sm" variant="primary" onClick={() => staffGenerateInvoice(q.id)}>
+                          Émettre Facture SAMPLE
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <DataTable
               data={invoices}
@@ -552,11 +695,42 @@ export const AdminView: React.FC = () => {
               columns={[
                 { header: 'N° Facture', accessor: (i) => <strong>{i.id}</strong> },
                 { header: 'Entreprise', accessor: (i) => i.companyName },
-                { header: 'Mission', accessor: (i) => i.missionTitle },
                 { header: 'Honoraires Kazi (HT)', accessor: (i) => `${i.serviceFeeXAF.toLocaleString('fr-GA')} FCFA` },
                 { header: 'TVA (18%)', accessor: (i) => `${i.vatXAF.toLocaleString('fr-GA')} FCFA` },
                 { header: 'Total TTC', accessor: (i) => <strong>{i.totalXAF.toLocaleString('fr-GA')} FCFA</strong> },
-                { header: 'Statut', accessor: () => <StatusBadge label="SAMPLE" variant="warning" /> },
+                { header: 'Réglé (Hors-ligne)', accessor: (i) => `${(i.paidAmountXAF || 0).toLocaleString('fr-GA')} FCFA` },
+                {
+                  header: 'Statut',
+                  accessor: (i) => (
+                    <StatusBadge
+                      label={i.status || 'SAMPLE'}
+                      variant={i.status === 'PAID' ? 'success' : 'warning'}
+                    />
+                  ),
+                },
+                {
+                  header: 'Reçu Bancaire',
+                  accessor: (i) =>
+                    i.status !== 'PAID' ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          staffRecordReceipt(
+                            i.invoiceId || i.id,
+                            i.totalXAF - (i.paidAmountXAF || 0),
+                            `VIR-BGFI-${Date.now().toString().slice(-5)}`
+                          )
+                        }
+                      >
+                        Enregistrer reçu
+                      </Button>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: 'var(--color-success-text)', fontWeight: 700 }}>
+                        Soldée
+                      </span>
+                    ),
+                },
               ]}
             />
           </div>

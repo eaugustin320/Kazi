@@ -45,20 +45,43 @@ export const CompanyView: React.FC = () => {
     missions,
     attendance,
     invoices,
+    quotes,
+    replacements,
     supportTickets,
     createStaffingRequest,
     companyDecideProposal,
     companyDeclareAttendance,
+    adminRequestReplacement,
+    createSupportTicket,
     sendSupportMessage,
+    companyDecideQuote,
   } = usePrototype();
 
   const currentCompany = companies[0]; // BTP Horizon Gabon
   const companyRequests = staffingRequests.filter((r) => r.companyId === currentCompany.id);
   const companyProposals = proposals.filter((p) => p.companyDecision === 'PENDING');
   const companyMissions = missions.filter((m) => m.companyId === currentCompany.id);
-  const companyAttendance = attendance.filter((a) => a.missionId === 'mission-demo-01');
+  const companyMissionIds = new Set(companyMissions.map((m) => m.id));
+  const companyAttendance = attendance.filter(
+    (a) =>
+      !a.companyId ||
+      a.companyId === currentCompany.id ||
+      companyMissionIds.has(a.missionId)
+  );
   const companyInvoices = invoices.filter((i) => i.companyId === currentCompany.id);
-  const companyTicket = supportTickets.find((t) => t.creatorId === 'company-a') || supportTickets[0];
+  const companyQuotes = quotes.filter((q) => !q.companyId || q.companyId === currentCompany.id);
+  const companyReplacements = replacements.filter((r) => !r.companyId || r.companyId === currentCompany.id);
+  const companyTicket =
+    supportTickets.find((t) => t.creatorId === currentCompany.id || t.creatorId === 'company-a') ||
+    supportTickets[0] || {
+      id: 'ticket-01',
+      creatorRole: 'COMPANY' as const,
+      creatorId: currentCompany.id,
+      creatorName: currentCompany.name,
+      subject: 'Coordination chantier BTP Horizon',
+      status: 'OPEN' as const,
+      messages: [],
+    };
 
   // Request creation form state (Multi-step)
   const [reqStep, setReqStep] = useState<number>(1);
@@ -591,8 +614,57 @@ export const CompanyView: React.FC = () => {
                 record={rec}
                 role="COMPANY"
                 onDeclare={(status, hours, note) => companyDeclareAttendance(rec.id, status, hours, note)}
+                onRequestReplacement={() =>
+                  adminRequestReplacement(
+                    rec.assignmentId || 'assign-01',
+                    rec.workerId || 'wp_worker-01',
+                    [rec.assignmentDayId || 'day-01'],
+                    `Demande de remplacement entreprise sur la journée du ${rec.date}`
+                  )
+                }
               />
             ))}
+
+            {/* Active Replacement Requests (KZ11) */}
+            <div style={{ marginTop: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '10px' }}>
+                Demandes de Remplacement (KZ11) ({companyReplacements.length})
+              </h4>
+              {companyReplacements.length === 0 ? (
+                <div style={{ padding: '16px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                  Aucune demande de remplacement active. Utilisez « Demander un remplacement (KZ11) » sur une ligne de pointage en cas d’absence constatée.
+                </div>
+              ) : (
+                companyReplacements.map((rep) => (
+                  <div
+                    key={rep.id}
+                    style={{
+                      padding: '14px 16px',
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-card)',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '14px' }}>
+                        Remplacement #{rep.id.slice(0, 8)} &middot; Ouvrier : {rep.workerId}
+                      </strong>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                        Motif : {rep.reasonCode} {rep.note ? `— ${rep.note}` : ''}
+                      </div>
+                    </div>
+                    <StatusBadge
+                      label={rep.status === 'CONFIRMED' ? 'Remplacement confirmé' : 'En recherche par Kazi'}
+                      variant={rep.status === 'CONFIRMED' ? 'success' : 'warning'}
+                    />
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -607,6 +679,54 @@ export const CompanyView: React.FC = () => {
             <Alert type="warning" title="Spécimen de prototype (SAMPLE)">
               Ce document est un spécimen indicatif (SAMPLE). Les politiques fiscales et conditions d'émission légales sont en cours de validation finale avant le lancement officiel.
             </Alert>
+
+            {companyQuotes.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '10px' }}>
+                  Devis de Prestation Kazi ({companyQuotes.length})
+                </h4>
+                {companyQuotes.map((q) => (
+                  <div
+                    key={q.id}
+                    style={{
+                      padding: '16px',
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-card)',
+                      marginBottom: '10px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '14px' }}>Devis #{q.id.slice(0, 12)} (Rév. {q.revision})</strong>
+                      <div style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                        Honoraires HT : {Number(q.serviceAmount).toLocaleString('fr-GA')} FCFA &middot; TVA (18%) : {Number(q.taxAmount).toLocaleString('fr-GA')} FCFA &middot;{' '}
+                        <strong>Total TTC : {Number(q.totalAmount).toLocaleString('fr-GA')} FCFA</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <StatusBadge
+                        label={q.status}
+                        variant={q.status === 'ACCEPTED' ? 'success' : q.status === 'SENT' ? 'info' : 'neutral'}
+                      />
+                      {q.status === 'SENT' && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => companyDecideQuote(q.id, 'ACCEPT', q.version || 2)}
+                        >
+                          Accepter ce devis
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {companyInvoices.map((inv) => (
               <div
