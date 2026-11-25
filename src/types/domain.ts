@@ -148,7 +148,10 @@ export type AttendanceReviewState = 'NOT_RECORDED' | 'SUBMITTED_BY_COMPANY' | 'C
 
 export interface AttendanceRecord {
   id: string;
+  assignmentDayId?: string;
   missionId: string;
+  missionTitle?: string;
+  companyId?: string;
   assignmentId: string;
   workerId: string;
   workerName: string;
@@ -160,6 +163,55 @@ export interface AttendanceRecord {
   workerDisputeNote?: string;
   reviewState: AttendanceReviewState;
   staffResolutionNote?: string;
+  declarationRevision?: number;
+  version?: number;
+}
+
+export interface ReplacementItem {
+  id: string;
+  originalAssignmentId: string;
+  missionId: string;
+  companyId: string;
+  workerId: string;
+  affectedDayIds: string[];
+  requestedBy: string;
+  reasonCode: 'WORKER_ABSENT' | 'WORKER_ILLNESS' | 'SKILL_MISMATCH' | 'COMPANY_REQUEST';
+  note?: string;
+  status: 'REQUESTED' | 'UNDER_REVIEW' | 'PROPOSING' | 'CONFIRMED' | 'CANCELLED';
+  replacementAssignmentId?: string;
+  version: number;
+  createdAt: number;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  eventId: string;
+  templateKey: string;
+  payload: Record<string, unknown>;
+  readAt?: number;
+  createdAt: number;
+}
+
+export interface ServiceQuote {
+  id: string;
+  companyId: string;
+  missionId?: string;
+  revision: number;
+  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  serviceAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  lines: Array<{
+    description: string;
+    quantity: number;
+    unitAmount: number;
+    taxAmount: number;
+    lineTotal: number;
+  }>;
+  expiresAt: number;
+  version: number;
+  createdAt: number;
 }
 
 export interface SupportTicket {
@@ -167,9 +219,11 @@ export interface SupportTicket {
   creatorRole: UserRole;
   creatorId: string;
   creatorName: string;
+  category?: 'CHANTIER' | 'PAIEMENT' | 'POINTAGE' | 'ACCES';
   subject: string;
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
   missionId?: string;
+  version?: number;
   messages: Array<{
     id: string;
     senderRole: 'WORKER' | 'COMPANY' | 'STAFF';
@@ -182,6 +236,8 @@ export interface SupportTicket {
 
 export interface KaziInvoice {
   id: string;
+  invoiceId?: string;
+  quoteId?: string;
   companyId: string;
   companyName: string;
   missionId: string;
@@ -189,9 +245,11 @@ export interface KaziInvoice {
   serviceFeeXAF: number;
   vatXAF: number;
   totalXAF: number;
-  status: 'SAMPLE' | 'ISSUED' | 'PAID';
+  paidAmountXAF?: number;
+  status: 'SAMPLE' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID';
   issuedAt: string;
   isPrototypeSample: boolean; // Must always be true in prototype
+  version?: number;
 }
 
 export interface AuditEvent {

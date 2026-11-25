@@ -9,7 +9,7 @@ import { recordInvoiceReceipt } from '@/modules/billing/service';
 const ReceiptSchema = z.object({
   amount: z.number().int().min(1),
   externalReference: z.string().min(3),
-  receivedAt: z.number().int().min(1),
+  receivedAt: z.number().int().optional().default(() => Date.now()),
   note: z.string().optional(),
 });
 

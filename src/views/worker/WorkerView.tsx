@@ -48,8 +48,11 @@ export const WorkerView: React.FC = () => {
     applyToMission,
     withdrawApplication,
     workerConfirmProposal,
+    workerConfirmAttendance,
     workerDisputeAttendance,
+    createSupportTicket,
     sendSupportMessage,
+    updateMyProfile,
   } = usePrototype();
 
   const currentWorker = workers[0]; // Paul Mba
@@ -87,8 +90,23 @@ export const WorkerView: React.FC = () => {
     proposals.find((p) => p.status === 'AWAITING_WORKER' || p.status === 'READY_FOR_ASSIGNMENT') ||
     proposals[0];
   const workerAssignment = assignments.find((a) => a.workerId === activeWorkerId || a.workerId === currentWorker.id) || assignments[0];
-  const workerAttendance = attendance.filter((att) => att.workerId === activeWorkerId || att.workerId === currentWorker.id);
-  const workerTicket = supportTickets.find((t) => t.creatorId === currentWorker.id) || supportTickets[0];
+  const workerAttendance = attendance.filter(
+    (att) =>
+      att.workerId === activeWorkerId ||
+      att.workerId === currentWorker.id ||
+      att.workerId === 'wp_worker-01'
+  );
+  const workerTicket =
+    supportTickets.find((t) => t.creatorId === activeWorkerId || t.creatorId === currentWorker.id) ||
+    supportTickets[0] || {
+      id: 'ticket-01',
+      creatorRole: 'WORKER' as const,
+      creatorId: activeWorkerId,
+      creatorName: `${currentWorker.firstName} ${currentWorker.lastName}`,
+      subject: 'Confirmation de mission & point de ramassage',
+      status: 'OPEN' as const,
+      messages: [],
+    };
 
   const handleApplyConfirm = () => {
     applyToMission(activeMission.id, currentWorker.id);
@@ -136,28 +154,30 @@ export const WorkerView: React.FC = () => {
           </div>
         </div>
 
-        {/* State Simulator Switcher for D0 Verification */}
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <select
-            value={demoState}
-            onChange={(e) => setDemoState(e.target.value as any)}
-            style={{
-              fontSize: '11px',
-              padding: '4px 6px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: 'var(--color-background)',
-              border: '1px solid var(--color-control-border)',
-              color: 'var(--color-text)',
-            }}
-            title="Tester les états limites (D0c)"
-          >
-            <option value="normal">Cas Nominal</option>
-            <option value="otp_login">Écran Connexion OTP</option>
-            <option value="duplicate">État : Doublon</option>
-            <option value="expired">État : Proposition Expirée</option>
-            <option value="network_error">État : Erreur Réseau</option>
-          </select>
-        </div>
+        {/* State Simulator Switcher (strictly development only) */}
+        {Boolean(import.meta.env?.DEV) && import.meta.env?.MODE !== 'production' && (
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <select
+              value={demoState}
+              onChange={(e) => setDemoState(e.target.value as any)}
+              style={{
+                fontSize: '11px',
+                padding: '4px 6px',
+                borderRadius: 'var(--radius-input)',
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-control-border)',
+                color: 'var(--color-text)',
+              }}
+              title="Tester les états limites (D0c)"
+            >
+              <option value="normal">Cas Nominal</option>
+              <option value="otp_login">Écran Connexion OTP</option>
+              <option value="duplicate">État : Doublon</option>
+              <option value="expired">État : Proposition Expirée</option>
+              <option value="network_error">État : Erreur Réseau</option>
+            </select>
+          </div>
+        )}
       </header>
 
       {/* Main Content Area */}
@@ -589,6 +609,7 @@ export const WorkerView: React.FC = () => {
                           key={rec.id}
                           record={rec}
                           role="WORKER"
+                          onConfirm={() => workerConfirmAttendance(rec.id)}
                           onDispute={() => {
                             setDisputeRecordId(rec.id);
                             setIsDisputeModalOpen(true);
@@ -610,9 +631,24 @@ export const WorkerView: React.FC = () => {
             {/* VIEW 5: SUPPORT & MESSAGES */}
             {workerView === 'support' && (
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px' }}>
-                  Assistance & Coordination Kazi
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700 }}>
+                    Assistance & Coordination Kazi
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      createSupportTicket(
+                        'CHANTIER',
+                        'Demande de coordination chantier Libreville',
+                        'Bonjour Kazi, je souhaite confirmer les consignes EPI pour demain matin.'
+                      )
+                    }
+                  >
+                    Nouveau dossier
+                  </Button>
+                </div>
                 <div
                   style={{
                     backgroundColor: 'var(--color-surface)',
@@ -778,6 +814,23 @@ export const WorkerView: React.FC = () => {
                   <Alert type="info">
                     Vos coordonnées privées (téléphone, CNI) ne sont jamais communiquées aux entreprises avant confirmation d'affectation par le coordinateur Kazi.
                   </Alert>
+
+                  <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                      Disponibilité actuelle : <strong>{currentWorker.availableNow ? 'Disponible' : 'Occupé'}</strong>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        updateMyProfile({
+                          availabilityCode: currentWorker.availableNow ? 'BUSY' : 'AVAILABLE',
+                        })
+                      }
+                    >
+                      Basculer disponibilité
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

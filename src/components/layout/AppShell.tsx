@@ -17,6 +17,8 @@ import {
   Layers,
   LogOut,
   ChevronDown,
+  Bell,
+  Check,
 } from 'lucide-react';
 import { usePrototype } from '../../context/PrototypeContext';
 import { WorkerView } from '../../views/worker/WorkerView';
@@ -43,13 +45,18 @@ export const AppShell: React.FC = () => {
     theme,
     setTheme,
     contrastResults,
+    notifications,
+    markNotificationRead,
     resetToDefaults,
   } = usePrototype();
 
   const [isContrastModalOpen, setIsContrastModalOpen] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const isDevEnv = Boolean(import.meta.env?.DEV) && import.meta.env?.MODE !== 'production';
+  const unreadNotifications = notifications.filter((n) => !n.readAt);
   const [showDevToolbar, setShowDevToolbar] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (isDevEnv && typeof window !== 'undefined') {
       return (
         new URLSearchParams(window.location.search).get('dev') === 'true' ||
         localStorage.getItem('kazi_dev_mode') === 'true'
@@ -188,23 +195,151 @@ export const AppShell: React.FC = () => {
             <span>{theme.themeId === 'gabon-premium@1.0.0' ? 'Gabon' : 'Forest'}</span>
           </button>
 
-          {/* Dev mode toggle */}
-          <button
-            onClick={() => setShowDevToolbar(!showDevToolbar)}
-            style={{
-              padding: '5px 8px',
-              backgroundColor: showDevToolbar ? '#1E3A8A' : '#1E293B',
-              color: showDevToolbar ? '#93C5FD' : '#64748B',
-              border: `1px solid ${showDevToolbar ? '#3B82F6' : '#334155'}`,
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: 600,
-            }}
-            title="Afficher/masquer les outils de test et développement"
-          >
-            Dev
-          </button>
+          {/* In-App Notifications Center */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowNotifications(!showNotifications)}
+              aria-label="Notifications"
+              style={{
+                padding: '5px 10px',
+                backgroundColor: showNotifications ? '#1E3A8A' : '#1E293B',
+                color: '#F8FAFC',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+              }}
+            >
+              <Bell size={14} />
+              <span>Notifications</span>
+              {unreadNotifications.length > 0 && (
+                <span
+                  style={{
+                    backgroundColor: '#EF4444',
+                    color: '#FFFFFF',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  {unreadNotifications.length}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '38px',
+                  width: '340px',
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #334155',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  zIndex: 2000,
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.45)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <strong style={{ fontSize: '13px', color: '#F8FAFC' }}>
+                    Centre de notifications ({notifications.length})
+                  </strong>
+                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                    {unreadNotifications.length} non lue(s)
+                  </span>
+                </div>
+
+                {notifications.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#94A3B8', padding: '12px 0', textAlign: 'center' }}>
+                    Aucune notification pour cette session.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                    {notifications.map((n) => {
+                      const payload = (n.payload || {}) as Record<string, any>;
+                      const title = payload.title || payload.missionTitle || n.templateKey;
+                      const msg = payload.message || `Événement : ${n.templateKey}`;
+                      const isRead = Boolean(n.readAt);
+                      return (
+                        <div
+                          key={n.id}
+                          style={{
+                            padding: '10px',
+                            borderRadius: '8px',
+                            backgroundColor: isRead ? '#1E293B' : '#172554',
+                            border: `1px solid ${isRead ? '#334155' : '#3B82F6'}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong style={{ fontSize: '12px', color: '#F8FAFC' }}>{String(title)}</strong>
+                            <span style={{ fontSize: '10px', color: isRead ? '#64748B' : '#60A5FA', fontWeight: 700 }}>
+                              {isRead ? 'Lu' : 'Nouveau'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#CBD5E1' }}>{String(msg)}</div>
+                          {!isRead && (
+                            <button
+                              type="button"
+                              onClick={() => markNotificationRead(n.id)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                marginTop: '4px',
+                                padding: '3px 8px',
+                                backgroundColor: '#2563EB',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Check size={11} />
+                              <span>Marquer comme lu</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Dev mode toggle (strictly development only) */}
+          {isDevEnv && (
+            <button
+              onClick={() => setShowDevToolbar(!showDevToolbar)}
+              style={{
+                padding: '5px 8px',
+                backgroundColor: showDevToolbar ? '#1E3A8A' : '#1E293B',
+                color: showDevToolbar ? '#93C5FD' : '#64748B',
+                border: `1px solid ${showDevToolbar ? '#3B82F6' : '#334155'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+              title="Afficher/masquer les outils de test et développement"
+            >
+              Dev
+            </button>
+          )}
 
           {/* Logout */}
           <button

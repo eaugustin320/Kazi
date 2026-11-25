@@ -4,7 +4,28 @@ All notable changes to the Kazi codebase and design prototypes are documented in
 
 ---
 
-## [1.0.0] - 2026-11-24
+## [1.0.0] - 2026-11-25
+
+### Kazi 1.0.0 Complete V1 Screens, Fail-Closed Security, TOTP MFA & Playwright E2E Verification
+
+#### Added & Fixed
+- **Fail-Closed Environment & Production Build Guard (`src/server/config/env.ts`, `src/components/auth/AuthScreen.tsx`, `src/components/layout/AppShell.tsx`)**:
+  - Added `isDevOrTestEnvironment()` which enables debug/test helpers only when explicitly in `development` or `test` (`NODE_ENV === 'development' || NODE_ENV === 'test' || Boolean(process.env.VITEST) || process.argv.includes('--dev')`), failing closed when `NODE_ENV` is unset, `'staging'`, or `'production'`.
+  - Removed `NODE_ENV=development` from `.env` so `vite build` produces a true production bundle (426.78 kB) with all dev shortcuts, D0 state simulator dropdowns, and pre-filled credentials stripped.
+- **RFC 6238 TOTP Staff MFA (`src/server/auth/totp.ts`, `src/server/auth/mfa.ts`) & Better Auth (`src/server/auth/better-auth.ts`)**:
+  - Implemented standard RFC 6238 HMAC-SHA1 TOTP with Base32 secrets and `otpauth://` URIs so staff can authenticate with any standard TOTP app in production while fixed `'123456'` is rejected (HTTP 401).
+  - Fixed `authApi.getMe()` in `src/services/api.ts` so active sessions survive browser refresh without logging the user out.
+- **Connected V1 Screens & Strict Optimistic Concurrency**:
+  - **Attendance & Disputes**: Restored required `expectedVersion` and `declarationRevision` checks on attendance declaration, worker confirmation/dispute, and staff arbitration; removed hardcoded `'mission-demo-01'` filter in `CompanyView.tsx` and `'Paul Mba'` fallback in `/api/v1/attendance`; added worker `Pointage` bottom nav tab and `Confirmer ce pointage` button.
+  - **Replacements (KZ11)**: Enforced company ownership (`404` on cross-tenant) and role checks (`403` for workers) on `GET/POST /api/v1/replacements`, added `POST /api/v1/staff/replacements/[id]/confirm`, and wired replacement request/confirmation UI in `CompanyView.tsx` and `AdminView.tsx`.
+  - **Notifications, Support, Profiles & Service Billing**: Added header Notifications Center bell & mark-as-read drawer in `AppShell.tsx`, `GET/PATCH /api/v1/me/profile` with database-computed attendance rate and completed missions count, and full Service Quote -> Company Acceptance -> SAMPLE Invoice -> Offline Bank Receipt UI in `AdminView.tsx` and `CompanyView.tsx`.
+- **PostgreSQL Schema & Playwright E2E Browser Suite**:
+  - Added `tests/postgres_pglite_schema.test.ts` verifying all 27 tables and constraints on real embedded PostgreSQL 19 (`@electric-sql/pglite`), plus `docker-compose.yml` (`postgres:17.12-alpine`).
+  - Added `playwright.config.ts` and `e2e/kazi_v1_screens.spec.ts` (4 real browser E2E suites passing in 14.4s).
+
+---
+
+## [1.0.0-I6] - 2026-11-24
 
 ### Functioning Kazi 1.0.0 Operational Application & System Integration (I0–I6 COMPLETED)
 

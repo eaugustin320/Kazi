@@ -166,8 +166,21 @@ export const authApi = {
   // Active Session & Logout
   async getMe(): Promise<ApiUser | null> {
     try {
-      const res = await request<{ user: ApiUser }>('/api/auth/me');
-      return res.user;
+      const res = await request<any>('/api/auth/me');
+      if (!res) return null;
+      const u = res.user || res;
+      if (!u || !u.role) return null;
+      return {
+        id: u.id || u.userId,
+        role: u.role,
+        countryCode: u.countryCode || 'GA',
+        email: u.email,
+        phone: u.phone,
+        companyId: u.companyId,
+        workerProfileId: u.workerProfileId,
+        capabilities: u.capabilities,
+        mfaVerified: u.mfaVerified,
+      };
     } catch {
       return null;
     }
@@ -322,28 +335,120 @@ export const recruitmentApi = {
 // -------------------------------------------------------------------------
 
 export const operationsApi = {
-  async updateAttendance(assignmentDayId: string, status: string, checkInTime?: string, notes?: string): Promise<any> {
-    return request(`/api/v1/assignment-days/${assignmentDayId}/attendance`, {
+  async updateAttendance(
+    assignmentDayOrAttendanceId: string,
+    declaredStatus: 'PRESENT' | 'ABSENT' | 'PARTIAL',
+    workedMinutes: number | undefined,
+    note: string | undefined,
+    expectedVersion: number
+  ): Promise<any> {
+    return request(`/api/v1/assignment-days/${assignmentDayOrAttendanceId}/attendance`, {
       method: 'PUT',
-      body: JSON.stringify({ status, checkInTime, notes }),
+      body: JSON.stringify({
+        declaredStatus,
+        workedMinutes,
+        note,
+        expectedVersion,
+      }),
     });
   },
 
-  async disputeAttendance(attendanceId: string, reason: string): Promise<any> {
+  async confirmAttendance(attendanceId: string, declarationRevision: number): Promise<any> {
     return request(`/api/v1/attendance/${attendanceId}/worker-decision`, {
       method: 'POST',
-      body: JSON.stringify({ decision: 'DISPUTED', reason }),
+      body: JSON.stringify({
+        decision: 'CONFIRM',
+        declarationRevision: Math.max(1, declarationRevision),
+      }),
     });
   },
 
-  async resolveDispute(attendanceId: string, decision: 'CONFIRMED_PRESENT' | 'CONFIRMED_ABSENT' | 'SPLIT_HOURS', resolutionNotes: string): Promise<any> {
+  async disputeAttendance(
+    attendanceId: string,
+    disputeReason: string,
+    declarationRevision: number
+  ): Promise<any> {
+    return request(`/api/v1/attendance/${attendanceId}/worker-decision`, {
+      method: 'POST',
+      body: JSON.stringify({
+        decision: 'DISPUTE',
+        declarationRevision: Math.max(1, declarationRevision),
+        disputeReason,
+      }),
+    });
+  },
+
+  async resolveDispute(
+    attendanceId: string,
+    resolution: 'PRESENT' | 'ABSENT' | 'PARTIAL',
+    reason: string,
+    expectedVersion: number,
+    workedMinutes?: number
+  ): Promise<any> {
     return request(`/api/v1/staff/attendance/${attendanceId}/resolve`, {
       method: 'POST',
-      body: JSON.stringify({ decision, resolutionNotes, expectedVersion: 1 }),
+      body: JSON.stringify({
+        resolution,
+        reason,
+        workedMinutes,
+        expectedVersion: Math.max(1, expectedVersion),
+      }),
     });
   },
 
-  // Invoices & Receipts
+  // Quotes, Invoices & Receipts
+  async listQuotes(): Promise<any[]> {
+    return request('/api/v1/staff/quotes');
+  },
+
+  async listCompanyQuotes(companyId: string): Promise<any[]> {
+    return request(`/api/v1/companies/${companyId}/quotes`);
+  },
+
+  async createQuote(params: {
+    companyId: string;
+    missionId?: string;
+    lines: Array<{ description: string; quantity: number; unitAmount: number; taxRate?: number }>;
+  }): Promise<any> {
+    return request('/api/v1/staff/quotes', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async sendQuote(quoteId: string, expectedVersion: number): Promise<any> {
+    return request(`/api/v1/staff/quotes/${quoteId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ expectedVersion }),
+    });
+  },
+
+  async decideQuote(
+    quoteId: string,
+    decision: 'ACCEPT' | 'DECLINE',
+    expectedVersion: number
+  ): Promise<any> {
+    return request(`/api/v1/quotes/${quoteId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, expectedVersion }),
+    });
+  },
+
+  async createInvoiceFromQuote(params: {
+    acceptedQuoteId: string;
+    partyTaxSnapshot: {
+      rccm: string;
+      nif: string;
+      legalName: string;
+      billingAddress: string;
+    };
+  }): Promise<any> {
+    return request('/api/v1/staff/invoices', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
   async listInvoices(): Promise<any[]> {
     return request('/api/v1/staff/invoices');
   },
@@ -356,10 +461,16 @@ export const operationsApi = {
     return request(`/api/v1/invoices/${id}`);
   },
 
-  async recordReceipt(invoiceId: string, amount: number, externalReference: string): Promise<any> {
+  async recordReceipt(
+    invoiceId: string,
+    amount: number,
+    externalReference: string,
+    receivedAt: number = Date.now(),
+    note?: string
+  ): Promise<any> {
     return request(`/api/v1/staff/invoices/${invoiceId}/receipts`, {
       method: 'POST',
-      body: JSON.stringify({ amount, externalReference }),
+      body: JSON.stringify({ amount, externalReference, receivedAt, note }),
     });
   },
 
@@ -375,22 +486,107 @@ export const operationsApi = {
     return request('/api/v1/support-cases');
   },
 
-  async createSupportCase(subject: string, message: string, priority: string = 'NORMAL'): Promise<any> {
+  async createSupportCase(params: {
+    category: 'CHANTIER' | 'PAIEMENT' | 'POINTAGE' | 'ACCES';
+    subject: string;
+    initialMessage: string;
+    missionId?: string;
+    assignmentId?: string;
+  }): Promise<any> {
     return request('/api/v1/support-cases', {
       method: 'POST',
-      body: JSON.stringify({ subject, message, priority }),
+      body: JSON.stringify(params),
     });
   },
 
-  async sendSupportMessage(caseId: string, bodyText: string, isInternalNote: boolean = false): Promise<any> {
+  async sendSupportMessage(
+    caseId: string,
+    bodyText: string,
+    isInternalNote: boolean = false
+  ): Promise<any> {
     return request(`/api/v1/support-cases/${caseId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ bodyText, isInternalNote }),
+      body: JSON.stringify({
+        body: bodyText,
+        visibility: isInternalNote ? 'STAFF_ONLY' : 'PUBLIC_TO_CASE',
+      }),
+    });
+  },
+
+  async transitionSupportCase(
+    caseId: string,
+    status: 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_PARTY' | 'RESOLVED',
+    expectedVersion: number
+  ): Promise<any> {
+    return request(`/api/v1/staff/support-cases/${caseId}/transition`, {
+      method: 'POST',
+      body: JSON.stringify({ status, expectedVersion }),
     });
   },
 
   // Public config
   async getPublicConfig(): Promise<any> {
     return request('/api/v1/public-config');
+  },
+
+  // Attendance listing
+  async listAttendance(): Promise<any[]> {
+    return request('/api/v1/attendance');
+  },
+
+  // Support thread details
+  async getSupportCase(caseId: string): Promise<any> {
+    return request(`/api/v1/support-cases/${caseId}`);
+  },
+
+  // Notifications
+  async getMyNotifications(): Promise<any[]> {
+    return request('/api/v1/me/notifications');
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    return request(`/api/v1/me/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  // Replacements
+  async listReplacements(): Promise<any[]> {
+    return request('/api/v1/replacements');
+  },
+
+  async createReplacement(params: {
+    assignmentId: string;
+    missionId: string;
+    workerId: string;
+    affectedDayIds: string[];
+    reasonCode: 'WORKER_ABSENT' | 'WORKER_ILLNESS' | 'SKILL_MISMATCH' | 'COMPANY_REQUEST';
+    note?: string;
+  }): Promise<any> {
+    return request('/api/v1/replacements', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async confirmReplacement(
+    requestId: string,
+    replacementAssignmentId: string,
+    expectedVersion: number
+  ): Promise<any> {
+    return request(`/api/v1/staff/replacements/${requestId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ replacementAssignmentId, expectedVersion }),
+    });
+  },
+
+  // Profile
+  async getMyProfile(): Promise<any> {
+    return request('/api/v1/me/profile');
+  },
+
+  async updateMyProfile(patch: Record<string, unknown>): Promise<any> {
+    return request('/api/v1/me/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
 };

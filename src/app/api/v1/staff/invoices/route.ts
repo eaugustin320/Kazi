@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateRequest, requireStaffCapability } from '@/server/auth/rbac';
-import { createInvoiceFromQuote } from '@/modules/billing/service';
+import { createInvoiceFromQuote, listAllInvoices } from '@/modules/billing/service';
 
 const CreateInvoiceSchema = z.object({
   acceptedQuoteId: z.string().min(1),
@@ -27,9 +27,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const { getDatabaseConnection } = await import('@/server/db/database');
-    const db = getDatabaseConnection();
-    const invoices = db.prepare('SELECT * FROM invoices ORDER BY created_at DESC;').all();
+    const invoices = listAllInvoices();
 
     return NextResponse.json({
       data: invoices,

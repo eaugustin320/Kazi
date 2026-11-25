@@ -1,5 +1,6 @@
 // Staff Attendance Dispute Resolution Handler (POST /api/v1/staff/attendance/[id]/resolve)
 // Recruiter arbitrates disputed daily attendance (API.md line 57 KZ10)
+// Strictly requires expectedVersion for optimistic concurrency control.
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -49,8 +50,11 @@ export async function POST(
 
     if (!result.success) {
       const status =
-        result.errorCode === 'ATTENDANCE_NOT_FOUND' ? 404 :
-        result.errorCode === 'VERSION_CONFLICT' ? 409 : 400;
+        result.errorCode === 'ATTENDANCE_NOT_FOUND'
+          ? 404
+          : result.errorCode === 'VERSION_CONFLICT'
+          ? 409
+          : 400;
 
       return NextResponse.json(
         { error: { code: result.errorCode, message: result.errorMessage } },
@@ -62,12 +66,12 @@ export async function POST(
       data: result.attendance,
       meta: {
         requestId: `req_${Date.now()}`,
-        message: 'Litige de présence arbitré et clôturé par le recruteur staff (KZ10).',
+        message: 'Litige de pointage résolu par le recruteur Kazi.',
       },
     });
   } catch {
     return NextResponse.json(
-      { error: { code: 'SERVER_ERROR', message: 'Erreur lors de l’arbitrage du pointage.' } },
+      { error: { code: 'SERVER_ERROR', message: 'Erreur lors de la résolution du litige.' } },
       { status: 500 }
     );
   }

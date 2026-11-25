@@ -7,8 +7,10 @@ import { authenticateRequest } from '@/server/auth/rbac';
 import { postCaseMessage, getCaseById } from '@/modules/support/service';
 
 const PostMessageSchema = z.object({
-  body: z.string().min(1).max(4000),
+  body: z.string().max(4000).optional(),
+  bodyText: z.string().max(4000).optional(),
   visibility: z.enum(['PUBLIC_TO_CASE', 'STAFF_ONLY']).optional(),
+  isInternalNote: z.boolean().optional(),
 });
 
 export async function POST(
@@ -57,13 +59,23 @@ export async function POST(
       );
     }
 
+    const content = parsed.data.body || parsed.data.bodyText;
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'Le message ne peut être vide' } },
+        { status: 422 }
+      );
+    }
+
+    const visibility = parsed.data.visibility || (parsed.data.isInternalNote ? 'STAFF_ONLY' : 'PUBLIC_TO_CASE');
+
     const result = postCaseMessage({
       caseId,
       authorId: session.user.userId,
       authorRole: session.user.role,
       authorName: session.user.role === 'STAFF' ? 'Support Kazi' : session.user.email || 'Utilisateur',
-      body: parsed.data.body,
-      visibility: parsed.data.visibility,
+      body: content,
+      visibility,
     });
 
     if (!result.success) {

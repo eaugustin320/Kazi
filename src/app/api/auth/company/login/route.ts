@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { verifyPassword } from '@/server/auth/passwords';
 import { createSession } from '@/server/auth/session';
 import { get } from '@/server/db/database';
+import { isDevOrTestEnvironment, isSecureCookieEnvironment } from '@/server/config/env';
 
 const CompanyLoginSchema = z.object({
   email: z.string().email(),
@@ -39,8 +40,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify password (in development, allow Password123! or verified password)
-    const isValid = verifyPassword(password, user.password_hash) || (process.env.NODE_ENV !== 'production' && password === 'Password123!');
+    // Verify password (fail-closed outside explicit development/test environment)
+    const isValid =
+      verifyPassword(password, user.password_hash) ||
+      (isDevOrTestEnvironment() && password === 'Password123!');
     if (!isValid) {
       return NextResponse.json(
         { error: { code: 'INVALID_CREDENTIALS', message: 'Identifiants incorrects.' } },

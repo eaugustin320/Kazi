@@ -4,6 +4,7 @@
 
 import { randomInt, randomUUID, timingSafeEqual } from 'crypto';
 import { execute, get, query } from '../db/database';
+import { isDevOrTestEnvironment } from '../config/env';
 
 export interface OTPChallenge {
   phone: string;
@@ -94,7 +95,7 @@ export function createOTPChallenge(phone: string): SendOTPResult {
 
   return {
     success: true,
-    debugCode: process.env.NODE_ENV !== 'production' ? code : undefined,
+    debugCode: isDevOrTestEnvironment() ? code : undefined,
   };
 }
 
