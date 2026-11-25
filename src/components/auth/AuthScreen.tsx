@@ -18,27 +18,28 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Worker Form State
-  const [workerPhone, setWorkerPhone] = useState('+24101000000');
+  const isDev = Boolean(import.meta.env?.DEV);
+  const [workerPhone, setWorkerPhone] = useState(isDev ? '+24101000000' : '');
   const [workerOtp, setWorkerOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpHint, setOtpHint] = useState<string | null>(null);
 
   const [showDevShortcuts, setShowDevShortcuts] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (isDev && typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('dev') === 'true' || localStorage.getItem('kazi_dev_mode') === 'true';
     }
     return false;
   });
 
   // Company Form State
-  const [companyEmail, setCompanyEmail] = useState('contact@btphorizon.ga');
-  const [companyPassword, setCompanyPassword] = useState('Password123!');
+  const [companyEmail, setCompanyEmail] = useState(isDev ? 'contact@btphorizon.ga' : '');
+  const [companyPassword, setCompanyPassword] = useState(isDev ? 'Password123!' : '');
 
   // Staff Form State
-  const [staffEmail, setStaffEmail] = useState('recruiter@kazi.ga');
-  const [staffPassword, setStaffPassword] = useState('Password123!');
+  const [staffEmail, setStaffEmail] = useState(isDev ? 'recruiter@kazi.ga' : '');
+  const [staffPassword, setStaffPassword] = useState(isDev ? 'Password123!' : '');
   const [staffMfaTicket, setStaffMfaTicket] = useState<string | null>(null);
-  const [staffMfaCode, setStaffMfaCode] = useState('123456');
+  const [staffMfaCode, setStaffMfaCode] = useState(isDev ? '123456' : '');
 
   // Handle Worker Flow
   const handleWorkerSendOtp = async () => {
@@ -634,23 +635,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           )}
         </div>
 
-        {/* Discrete footer for developer / demo tools */}
-        <div style={{ marginTop: '20px', borderTop: '1px solid #1E293B', paddingTop: '14px', textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setShowDevShortcuts(!showDevShortcuts)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#64748B',
-              fontSize: '12px',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-          >
-            {showDevShortcuts ? 'Masquer les raccourcis de développement' : 'Outils de test & Comptes de démonstration'}
-          </button>
-        </div>
+        {/* Discrete footer for developer / demo tools (strictly development only) */}
+        {isDev && (
+          <div style={{ marginTop: '20px', borderTop: '1px solid #1E293B', paddingTop: '14px', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setShowDevShortcuts(!showDevShortcuts)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#64748B',
+                fontSize: '12px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              {showDevShortcuts ? 'Masquer les raccourcis de développement' : 'Outils de test & Comptes de démonstration'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

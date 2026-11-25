@@ -393,4 +393,38 @@ export const operationsApi = {
   async getPublicConfig(): Promise<any> {
     return request('/api/v1/public-config');
   },
+
+  // Attendance listing
+  async listAttendance(): Promise<any[]> {
+    return request('/api/v1/attendance');
+  },
+
+  // Support thread details
+  async getSupportCase(caseId: string): Promise<any> {
+    return request(`/api/v1/support-cases/${caseId}`);
+  },
+
+  // Notifications
+  async getMyNotifications(): Promise<any[]> {
+    return request('/api/v1/me/notifications');
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    return request(`/api/v1/me/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  // Replacements
+  async createReplacement(params: {
+    assignmentId: string;
+    missionId: string;
+    workerId: string;
+    affectedDayIds: string[];
+    reasonCode: 'WORKER_ABSENT' | 'WORKER_ILLNESS' | 'SKILL_MISMATCH' | 'COMPANY_REQUEST';
+    note?: string;
+  }): Promise<any> {
+    return request('/api/v1/replacements', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
 };

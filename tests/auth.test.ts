@@ -366,5 +366,38 @@ describe('Phase D2: Authentication, Security & Tenant Isolation', () => {
       expect(mfaData.data.user.mfaVerified).toBe(true);
       expect(mfaData.data.user.capabilities).toContain('SUPER_ADMIN');
     });
+
+    it('Production security enforcement: strictly rejects fixed MFA code 123456 and enforces dynamic challenge in production', async () => {
+      const prevEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = 'production';
+
+        // 1. Staff login with invalid credentials rejected in production
+        const badLoginReq = new Request('http://localhost:3000/api/auth/staff/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'admin@kazi.ga', password: 'WrongPassword!' }),
+        });
+        const badLoginRes = await staffLoginHandler(badLoginReq);
+        expect(badLoginRes.status).toBe(401);
+
+        // 2. Staff MFA verification with fixed '123456' is strictly rejected in production
+        const mfaReq = new Request('http://localhost:3000/api/auth/staff/mfa-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'admin@kazi.ga',
+            mfaTicket: 'mfa_ticket_fake_ticket',
+            code: '123456',
+          }),
+        });
+        const mfaRes = await staffMfaHandler(mfaReq);
+        expect(mfaRes.status).toBe(401);
+        const mfaErr = await mfaRes.json();
+        expect(mfaErr.error.code).toBe('INVALID_MFA_CODE');
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+      }
+    });
   });
 });

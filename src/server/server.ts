@@ -75,6 +75,16 @@ import * as StaffAudit from '../app/api/v1/staff/audit/route';
 import * as StaffTeam from '../app/api/v1/staff/team/route';
 import * as StaffGrantUpdate from '../app/api/v1/staff/grants/[id]/route';
 
+import * as AttendanceRoute from '../app/api/v1/attendance/route';
+import * as ReplacementsRoute from '../app/api/v1/replacements/route';
+import * as MeNotifications from '../app/api/v1/me/notifications/route';
+import * as MeNotificationRead from '../app/api/v1/me/notifications/[id]/read/route';
+import * as DocumentsUploadIntents from '../app/api/v1/documents/upload-intents/route';
+import * as DocumentComplete from '../app/api/v1/documents/[id]/complete/route';
+import * as DocumentAccess from '../app/api/v1/documents/[id]/access/route';
+import * as StaffCompanyReview from '../app/api/v1/staff/companies/[id]/review/route';
+import * as StaffConfigPreview from '../app/api/v1/staff/config/preview/route';
+
 type RouteHandler = (
   req: Request,
   context: any
@@ -203,9 +213,18 @@ register('GET', '/api/v1/staff/finalization', StaffFinalization.GET);
 register('POST', '/api/v1/staff/finalization', StaffFinalization.POST);
 
 // Attendance & Disputes
+register('GET', '/api/v1/attendance', AttendanceRoute.GET);
 register('PUT', '/api/v1/assignment-days/:id/attendance', AssignmentDaysAttendance.PUT);
 register('POST', '/api/v1/attendance/:id/worker-decision', AttendanceWorkerDecision.POST);
 register('POST', '/api/v1/staff/attendance/:id/resolve', StaffAttendanceResolve.POST);
+register('POST', '/api/v1/replacements', ReplacementsRoute.POST);
+
+// Notifications & Documents
+register('GET', '/api/v1/me/notifications', MeNotifications.GET);
+register('POST', '/api/v1/me/notifications/:id/read', MeNotificationRead.POST);
+register('POST', '/api/v1/documents/upload-intents', DocumentsUploadIntents.POST);
+register('POST', '/api/v1/documents/:id/complete', DocumentComplete.POST);
+register('GET', '/api/v1/documents/:id/access', DocumentAccess.GET);
 
 // Support
 register('GET', '/api/v1/support-cases', SupportCases.GET);
@@ -230,7 +249,9 @@ register('POST', '/api/v1/staff/invoices/:id/receipts', StaffInvoiceReceipts.POS
 register('POST', '/api/v1/staff/receipts/:id/reverse', StaffReceiptReverse.POST);
 
 // Staff Config & Admin
+register('POST', '/api/v1/staff/config/preview', StaffConfigPreview.POST);
 register('POST', '/api/v1/staff/config/activate', StaffConfigActivate.POST);
+register('POST', '/api/v1/staff/companies/:id/review', StaffCompanyReview.POST);
 register('GET', '/api/v1/staff/audit', StaffAudit.GET);
 register('GET', '/api/v1/staff/team', StaffTeam.GET);
 register('POST', '/api/v1/staff/team', StaffTeam.POST);
@@ -423,5 +444,14 @@ export function startServer(port: number = Number(process.env.PORT) || 3001): ht
   return server;
 }
 
-// Automatically start if executed directly
-startServer();
+// Automatically start if executed directly via CLI (not in vitest runner)
+import { fileURLToPath } from 'node:url';
+
+const isDirectExecution = process.argv[1] && (
+  process.argv[1].endsWith('server.ts') ||
+  process.argv[1].endsWith('server.js')
+);
+
+if (isDirectExecution && !process.env.VITEST) {
+  startServer();
+}

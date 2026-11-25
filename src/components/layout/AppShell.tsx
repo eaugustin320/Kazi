@@ -49,7 +49,7 @@ export const AppShell: React.FC = () => {
   const [isContrastModalOpen, setIsContrastModalOpen] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const [showDevToolbar, setShowDevToolbar] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (Boolean(import.meta.env?.DEV) && typeof window !== 'undefined') {
       return (
         new URLSearchParams(window.location.search).get('dev') === 'true' ||
         localStorage.getItem('kazi_dev_mode') === 'true'

@@ -453,6 +453,22 @@ export function listCompanyInvoices(companyId: string): InvoiceRecord[] {
   return [];
 }
 
+export function listAllInvoices(): InvoiceRecord[] {
+  const mem = Array.from(invoicesStore.values());
+  if (mem.length > 0) return mem;
+
+  try {
+    const rows = query<any>('SELECT * FROM invoices ORDER BY created_at DESC;');
+    return rows.map((r) => {
+      const sumRow = get<any>('SELECT COALESCE(SUM(amount), 0) as paid FROM service_receipts WHERE invoice_id = ?;', [r.id]);
+      const paid = Number(sumRow?.paid || 0);
+      return mapDbRowToInvoice(r, paid);
+    });
+  } catch {}
+
+  return [];
+}
+
 export function getInvoiceById(invoiceId: string): InvoiceRecord | null {
   const cached = invoicesStore.get(invoiceId);
   if (cached) return cached;

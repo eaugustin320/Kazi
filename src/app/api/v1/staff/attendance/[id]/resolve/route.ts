@@ -7,10 +7,12 @@ import { authenticateRequest, requireStaffCapability } from '@/server/auth/rbac'
 import { staffResolveAttendance } from '@/modules/attendance/service';
 
 const ResolveSchema = z.object({
-  resolution: z.enum(['PRESENT', 'ABSENT', 'PARTIAL']),
-  reason: z.string().min(5, 'Une justification détaillée est requise'),
+  resolution: z.enum(['PRESENT', 'ABSENT', 'PARTIAL']).optional(),
+  decision: z.enum(['PRESENT', 'ABSENT', 'PARTIAL', 'CONFIRMED_PRESENT', 'CONFIRMED_ABSENT', 'SPLIT_HOURS']).optional(),
+  reason: z.string().optional(),
+  resolutionNotes: z.string().optional(),
   workedMinutes: z.number().int().min(1).optional(),
-  expectedVersion: z.number().int().min(1),
+  expectedVersion: z.number().int().optional().default(1),
 });
 
 export async function POST(
@@ -38,13 +40,22 @@ export async function POST(
       );
     }
 
+    const rawDecision = parsed.data.decision || parsed.data.resolution || 'PRESENT';
+    const normResolution = (rawDecision === 'CONFIRMED_PRESENT' || rawDecision === 'PRESENT')
+      ? 'PRESENT'
+      : (rawDecision === 'CONFIRMED_ABSENT' || rawDecision === 'ABSENT')
+      ? 'ABSENT'
+      : 'PARTIAL';
+    const normReason = parsed.data.resolutionNotes || parsed.data.reason || 'Décision d’arbitrage par le staff Kazi';
+    const normVersion = parsed.data.expectedVersion || 1;
+
     const result = staffResolveAttendance(
       session!.user.userId,
       attendanceId,
-      parsed.data.resolution,
-      parsed.data.reason,
+      normResolution,
+      normReason,
       parsed.data.workedMinutes,
-      parsed.data.expectedVersion
+      normVersion
     );
 
     if (!result.success) {

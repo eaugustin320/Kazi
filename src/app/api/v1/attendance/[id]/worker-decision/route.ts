@@ -7,9 +7,10 @@ import { authenticateRequest } from '@/server/auth/rbac';
 import { workerDecideAttendance } from '@/modules/attendance/service';
 
 const DecisionSchema = z.object({
-  decision: z.enum(['CONFIRM', 'DISPUTE']),
-  declarationRevision: z.number().int().min(1),
+  decision: z.enum(['CONFIRM', 'DISPUTE', 'CONFIRMED', 'DISPUTED']),
+  declarationRevision: z.number().int().optional().default(1),
   disputeReason: z.string().optional(),
+  reason: z.string().optional(),
 });
 
 export async function POST(
@@ -36,13 +37,17 @@ export async function POST(
       );
     }
 
+    const normDecision = parsed.data.decision === 'CONFIRMED' ? 'CONFIRM' : parsed.data.decision === 'DISPUTED' ? 'DISPUTE' : parsed.data.decision;
+    const normReason = parsed.data.disputeReason || parsed.data.reason;
+    const normRevision = parsed.data.declarationRevision || 1;
+
     const workerId = session.user.workerProfileId || session.user.userId;
     const result = workerDecideAttendance(
       workerId,
       attendanceId,
-      parsed.data.decision,
-      parsed.data.declarationRevision,
-      parsed.data.disputeReason
+      normDecision,
+      normRevision,
+      normReason
     );
 
     if (!result.success) {

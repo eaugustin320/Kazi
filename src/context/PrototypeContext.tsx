@@ -343,6 +343,113 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setProposals(mappedProps);
         }
       }
+
+      // 5. Fetch Invoices for Staff or Company
+      if (currentUser?.role === 'STAFF') {
+        try {
+          const invs = await operationsApi.listInvoices();
+          if (Array.isArray(invs) && invs.length > 0) {
+            setInvoices(
+              invs.map((i: any) => ({
+                id: i.invoiceNumber || i.id,
+                companyId: i.companyId || i.company_id || 'company-a',
+                companyName: i.partyTaxSnapshot?.legalName || 'BTP Horizon Gabon',
+                missionId: i.missionId || 'mission-demo-01',
+                missionTitle: 'Mission Kazi',
+                serviceFeeXAF: Number(i.subtotalAmount || i.subtotal_amount || 45000),
+                vatXAF: Number(i.taxAmount || i.tax_amount || 8100),
+                totalXAF: Number(i.totalAmount || i.total_amount || 53100),
+                status: i.status === 'PAID' ? 'PAID' : i.status === 'ISSUED' ? 'ISSUED' : 'SAMPLE',
+                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-20',
+                isPrototypeSample: i.isSampleWatermark !== false,
+              }))
+            );
+          }
+        } catch {}
+      } else if (currentUser?.role === 'COMPANY' && currentUser.companyId) {
+        try {
+          const invs = await operationsApi.listCompanyInvoices(currentUser.companyId);
+          if (Array.isArray(invs) && invs.length > 0) {
+            setInvoices(
+              invs.map((i: any) => ({
+                id: i.invoiceNumber || i.id,
+                companyId: i.companyId || i.company_id || currentUser.companyId!,
+                companyName: i.partyTaxSnapshot?.legalName || 'BTP Horizon Gabon',
+                missionId: i.missionId || 'mission-demo-01',
+                missionTitle: 'Mission Kazi',
+                serviceFeeXAF: Number(i.subtotalAmount || i.subtotal_amount || 45000),
+                vatXAF: Number(i.taxAmount || i.tax_amount || 8100),
+                totalXAF: Number(i.totalAmount || i.total_amount || 53100),
+                status: i.status === 'PAID' ? 'PAID' : i.status === 'ISSUED' ? 'ISSUED' : 'SAMPLE',
+                issuedAt: i.issuedAt ? new Date(i.issuedAt).toISOString().split('T')[0] : '2026-11-20',
+                isPrototypeSample: i.isSampleWatermark !== false,
+              }))
+            );
+          }
+        } catch {}
+      }
+
+      // 6. Fetch Attendance
+      try {
+        const attList = await operationsApi.listAttendance();
+        if (Array.isArray(attList) && attList.length > 0) {
+          setAttendance((prev) => {
+            const map = new Map<string, any>();
+            for (const a of prev) map.set(a.id, a);
+            for (const a of attList) map.set(a.id, a);
+            return Array.from(map.values());
+          });
+        }
+      } catch {}
+
+      // 7. Fetch Support Cases
+      try {
+        const cases = await operationsApi.listSupportCases();
+        if (Array.isArray(cases) && cases.length > 0) {
+          const mappedTickets: SupportTicket[] = await Promise.all(
+            cases.map(async (c: any) => {
+              let messages: any[] = [];
+              try {
+                const thread = await operationsApi.getSupportCase(c.id);
+                if (thread?.messages) {
+                  messages = thread.messages.map((m: any) => ({
+                    id: m.id,
+                    senderRole: m.authorRole,
+                    senderName: m.authorName || m.authorRole,
+                    content: m.body,
+                    timestamp: new Date(m.createdAt).toISOString(),
+                    isStaffInternal: m.visibility === 'STAFF_ONLY',
+                  }));
+                }
+              } catch {}
+              return {
+                id: c.id,
+                creatorRole: (c.workerId ? 'WORKER' : 'COMPANY') as any,
+                creatorId: c.workerId || c.companyId || c.reporterUserId,
+                creatorName: c.reporterUserId,
+                subject: c.subject,
+                status: (c.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : c.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN') as any,
+                missionId: c.missionId || 'mission-demo-01',
+                messages: messages.length > 0 ? messages : [
+                  {
+                    id: `msg-${c.id}-init`,
+                    senderRole: (c.workerId ? 'WORKER' : 'COMPANY') as any,
+                    senderName: c.reporterUserId,
+                    content: c.subject,
+                    timestamp: new Date(c.createdAt || Date.now()).toISOString(),
+                  },
+                ],
+              };
+            })
+          );
+          setSupportTickets((prev) => {
+            const map = new Map<string, SupportTicket>();
+            for (const t of prev) map.set(t.id, t);
+            for (const t of mappedTickets) map.set(t.id, t);
+            return Array.from(map.values());
+          });
+        }
+      } catch {}
     } catch (err: any) {
       console.warn('[Kazi Data] Notice on initial data fetch:', err.message);
     }
@@ -803,8 +910,20 @@ export const PrototypeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 
   const adminRequestReplacement = useCallback(
-    (_assignmentId: string, absentWorkerId: string, dates: string[]) => {
-      showToast('info', 'Remplacement engagé', `Recherche de remplaçant sur ${dates.length} date(s).`);
+    async (assignmentId: string, absentWorkerId: string, dates: string[]) => {
+      try {
+        await operationsApi.createReplacement({
+          assignmentId,
+          missionId: 'mission-demo-01',
+          workerId: absentWorkerId,
+          affectedDayIds: dates.length > 0 ? dates : ['day-01'],
+          reasonCode: 'WORKER_ABSENT',
+          note: `Remplacement demandé par staff pour ${dates.length} date(s).`,
+        });
+        showToast('success', 'Remplacement enregistré', `Demande de remplacement enregistrée pour ${absentWorkerId}.`);
+      } catch {
+        showToast('info', 'Remplacement engagé', `Recherche de remplaçant sur ${dates.length} date(s).`);
+      }
     },
     [showToast]
   );

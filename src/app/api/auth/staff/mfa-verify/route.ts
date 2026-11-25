@@ -1,9 +1,11 @@
 // Staff MFA Verification Route Handler (POST /api/auth/staff/mfa-verify)
-// Verifies TOTP / MFA code and grants capabilities with mfaVerified: true
+// Verifies dynamic MFA code and grants session with mfaVerified: true
+// Strictly rejects fixed or bypass codes in production environment
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSession } from '@/server/auth/session';
+import { verifyMfaChallenge } from '@/server/auth/mfa';
 
 const StaffMfaVerifySchema = z.object({
   mfaTicket: z.string().min(5),
@@ -23,10 +25,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { code, email } = parsed.data;
+    const { mfaTicket, code, email } = parsed.data;
 
-    // Baseline test MFA check (valid code e.g. "123456" or any 6 digits starting with 1 in tests)
-    if (code !== '123456' && !code.startsWith('241')) {
+    // Verify dynamic MFA challenge with server-side production enforcement
+    const isValid = verifyMfaChallenge(mfaTicket, email, code);
+    if (!isValid) {
       return NextResponse.json(
         { error: { code: 'INVALID_MFA_CODE', message: 'Code MFA incorrect ou expiré.' } },
         { status: 401 }

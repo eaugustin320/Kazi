@@ -246,6 +246,58 @@ export function listAttendanceByWorker(workerId: string): AttendanceRecord[] {
   return [];
 }
 
+export function listAllAttendance(): AttendanceRecord[] {
+  try {
+    const rows = query<any>(
+      `SELECT
+        a.id, a.assignment_day_id, ad.assignment_id, ad.worker_id, asgn.mission_id, m.company_id,
+        substr(ad.starts_at, 1, 10) as local_date, a.declared_status, a.worked_minutes, a.declared_by,
+        a.declaration_revision, a.worker_decision, a.worker_confirmed_revision, a.resolution_status,
+        a.resolved_by, a.reason, a.version, a.created_at, a.updated_at
+      FROM attendance a
+      LEFT JOIN assignment_days ad ON a.assignment_day_id = ad.id
+      LEFT JOIN assignments asgn ON ad.assignment_id = asgn.id
+      LEFT JOIN missions m ON asgn.mission_id = m.id
+      ORDER BY a.created_at DESC;`
+    );
+    if (rows && rows.length > 0) {
+      const mappedList = rows.map(mapDbRowToAttendance);
+      for (const item of mappedList) {
+        attendanceStore.set(item.id, item);
+      }
+      return mappedList;
+    }
+  } catch {}
+  return Array.from(attendanceStore.values());
+}
+
+export function listAttendanceByCompany(companyId: string): AttendanceRecord[] {
+  try {
+    const rows = query<any>(
+      `SELECT
+        a.id, a.assignment_day_id, ad.assignment_id, ad.worker_id, asgn.mission_id, m.company_id,
+        substr(ad.starts_at, 1, 10) as local_date, a.declared_status, a.worked_minutes, a.declared_by,
+        a.declaration_revision, a.worker_decision, a.worker_confirmed_revision, a.resolution_status,
+        a.resolved_by, a.reason, a.version, a.created_at, a.updated_at
+      FROM attendance a
+      LEFT JOIN assignment_days ad ON a.assignment_day_id = ad.id
+      LEFT JOIN assignments asgn ON ad.assignment_id = asgn.id
+      LEFT JOIN missions m ON asgn.mission_id = m.id
+      WHERE m.company_id = ?
+      ORDER BY a.created_at DESC;`,
+      [companyId]
+    );
+    if (rows && rows.length > 0) {
+      const mappedList = rows.map(mapDbRowToAttendance);
+      for (const item of mappedList) {
+        attendanceStore.set(item.id, item);
+      }
+      return mappedList;
+    }
+  } catch {}
+  return Array.from(attendanceStore.values()).filter((a) => a.companyId === companyId);
+}
+
 export function getAttendanceEvents(attendanceId: string): AttendanceEventRecord[] {
   const mem = attendanceEventsStore.get(attendanceId);
   if (mem && mem.length > 0) return mem;
